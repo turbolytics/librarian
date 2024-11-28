@@ -1,0 +1,14 @@
+archiver:
+  logger:
+    level: debug
+
+sources:
+  postgres:
+    type: postgres
+    connection_string: "postgresql://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+
+collections:
+  users:
+    source: postgres
+    table: users
+    schema: public
