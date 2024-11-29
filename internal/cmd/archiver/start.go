@@ -1,4 +1,4 @@
-package cmd
+package archiver
 
 import (
 	"fmt"
@@ -13,32 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewArchiverCommand() *cobra.Command {
-	var cmd = &cobra.Command{
-		Use:   "archiver",
-		Short: "Manages the archival of data",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("welcome to librarian archiver!")
-			return nil
-		},
-	}
-	cmd.AddCommand(newArchiveStartCommand())
-	cmd.AddCommand(newArchiveCollectCommand())
-	return cmd
-}
-
-func newArchiveCollectCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "collect",
-		Short: "Collects data from a source",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("collecting data from source")
-			return nil
-		},
-	}
-}
-
-func newArchiveStartCommand() *cobra.Command {
+func newStartCommand() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "start",
 		Short: "Starts the archival daemon",

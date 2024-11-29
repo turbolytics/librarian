@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/turbolytics/librarian/internal/cmd/archiver"
 )
 
 func NewRootCommand() *cobra.Command {
@@ -18,7 +19,7 @@ func NewRootCommand() *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(NewArchiverCommand())
+	cmd.AddCommand(archiver.NewCommand())
 
 	return cmd
 }

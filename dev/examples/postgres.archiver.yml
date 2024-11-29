@@ -1,0 +1,23 @@
+archiver:
+  name: postgres-example-1
+  source:
+    connection_string: "postgresql://test:test@localhost:5432/test?sslmode=disable"
+    schema: public
+    table: users
+
+  collector:
+    type: snapshot
+
+  target:
+    region: us-east-1
+    bucket: librarian-test
+    endpoint: 's3.localhost.localstack.cloud:4566'
+    prefix: users
+
+  preserver:
+    type: parquet
+    batch_size: 1000
+    schema: |
+      test
+        
+
