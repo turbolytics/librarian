@@ -23,7 +23,19 @@ func NewArchiverCommand() *cobra.Command {
 		},
 	}
 	cmd.AddCommand(newArchiveStartCommand())
+	cmd.AddCommand(newArchiveCollectCommand())
 	return cmd
+}
+
+func newArchiveCollectCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "collect",
+		Short: "Collects data from a source",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("collecting data from source")
+			return nil
+		},
+	}
 }
 
 func newArchiveStartCommand() *cobra.Command {
