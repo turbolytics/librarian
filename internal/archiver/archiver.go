@@ -3,6 +3,7 @@ package archiver
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"go.uber.org/zap"
 
@@ -35,40 +36,29 @@ func (a *Archiver) Close(ctx context.Context) error {
 
 func (a *Archiver) Run(ctx context.Context) error {
 	// 1. Collect data from source
-	rows, err := a.source.Conn.Query(ctx, "SELECT * FROM "+a.source.Table)
+	snapshot, err := a.source.Snapshot(ctx)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer snapshot.Close()
 
-	fields := rows.FieldDescriptions()
-
-	columns := make([]string, len(fields))
-	for i, fd := range fields {
-		columns[i] = string(fd.Name)
-	}
-
-	for rows.Next() {
-		// Prepare a slice to hold the raw row values
-		values := make([]any, len(columns))
-		valuePtrs := make([]any, len(columns))
-		for i := range values {
-			valuePtrs[i] = &values[i]
+	for {
+		record, err := snapshot.Next()
+		if err == io.EOF {
+			break
 		}
 
-		err := rows.Scan(valuePtrs...)
 		if err != nil {
 			return err
 		}
 
-		record := make(map[string]any)
-		for i, col := range columns {
-			record[col] = values[i]
+		if record == nil {
+			break
 		}
 
 		fmt.Println(record)
 	}
-	// 2. Persist data to repository
+	// 2. Preserve data using the repository
 	// 3. Return nil
 	return nil
 }
