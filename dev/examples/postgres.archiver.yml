@@ -8,7 +8,7 @@ archiver:
   collector:
     type: snapshot
 
-  target:
+  repository:
     region: us-east-1
     bucket: librarian-test
     endpoint: 's3.localhost.localstack.cloud:4566'

@@ -34,9 +34,11 @@ type S3 struct {
 	Region string `yaml:"region"`
 }
 
-type Target struct {
-	Type string `yaml:"type"`
-	S3   S3     `yaml:"s3"`
+type Repository struct {
+	Bucket   string `yaml:"bucket"`
+	Region   string `yaml:"region"`
+	Prefix   string `yaml:"prefix"`
+	Endpoint string `yaml:"endpoint"`
 }
 
 type Preserver struct {
