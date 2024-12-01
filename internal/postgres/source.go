@@ -29,7 +29,7 @@ func (s *snapshot) Close() error {
 	return nil
 }
 
-func (s *snapshot) Next() (internal.Record, error) {
+func (s *snapshot) Next() (*internal.Record, error) {
 	row := s.rows.Next()
 	if !row {
 		return nil, io.EOF
@@ -46,10 +46,7 @@ func (s *snapshot) Next() (internal.Record, error) {
 		return nil, err
 	}
 
-	record := make(map[string]any)
-	for i, col := range s.columns {
-		record[col] = values[i]
-	}
+	record := internal.NewRecord(s.columns, values)
 
 	return record, nil
 }

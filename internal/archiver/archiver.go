@@ -56,6 +56,7 @@ func (a *Archiver) Run(ctx context.Context) error {
 	}
 	defer snapshot.Close()
 
+	// 2. Preserve data to repository
 	for {
 		record, err := snapshot.Next()
 		if err == io.EOF {
@@ -75,6 +76,7 @@ func (a *Archiver) Run(ctx context.Context) error {
 		}
 	}
 
+	// 3. Flush data to repository
 	return a.preserver.Flush(ctx)
 }
 

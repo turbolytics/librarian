@@ -58,7 +58,7 @@ func newInvokeCommand() *cobra.Command {
 						c.Archiver.Preserver.Schema,
 					),
 				),
-				parquet.WithBatchSize(c.Archiver.Preserver.BatchSize),
+				// parquet.WithBatchSizeNumRecords(c.Archiver.Preserver.BatchSizeNumRecords),
 			)
 
 			s3 := s3.New(
@@ -71,15 +71,13 @@ func newInvokeCommand() *cobra.Command {
 			)
 
 			a := archiver.New(
-				archiver.WithSource(source),
 				archiver.WithLogger(l),
+				archiver.WithSource(source),
 				archiver.WithPreserver(preserver),
 				archiver.WithRepository(s3),
 			)
 
 			defer a.Close(ctx)
-
-			l.Info("archiver", zap.Any("archiver", a))
 
 			if err := a.Run(ctx); err != nil {
 				return err

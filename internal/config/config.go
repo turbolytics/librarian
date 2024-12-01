@@ -43,9 +43,9 @@ type Field struct {
 }
 
 type Preserver struct {
-	Type      string  `yaml:"type"`
-	BatchSize int     `yaml:"batch_size"`
-	Schema    []Field `yaml:"schema"`
+	Type string `yaml:"type"`
+	// BatchSizeNumRecords int     `yaml:"batch_size_num_records"`
+	Schema []Field `yaml:"schema"`
 }
 
 type Librarian struct {
@@ -70,10 +70,15 @@ func NewLibrarianFromFile(fpath string) (*Librarian, error) {
 func ParquetFields(fields []Field) []parquet.Field {
 	parquetFields := make([]parquet.Field, len(fields))
 	for i, field := range fields {
-		parquetFields[i] = parquet.Field{
+		pf := parquet.Field{
 			Name: field.Name,
 			Type: field.Type,
 		}
+		if field.ConvertedType != "" {
+			pf.ConvertedType = field.ConvertedType
+		}
+		parquetFields[i] = pf
 	}
+
 	return parquetFields
 }
