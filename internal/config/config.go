@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 
+	"github.com/turbolytics/librarian/internal/parquet"
 	"gopkg.in/yaml.v3"
 )
 
@@ -15,8 +16,10 @@ type Global struct {
 }
 
 type Archiver struct {
-	Name   string `yaml:"name"`
-	Source Source `yaml:"source"`
+	Name       string     `yaml:"name"`
+	Source     Source     `yaml:"source"`
+	Preserver  Preserver  `yaml:"preserver"`
+	Repository Repository `yaml:"repository"`
 }
 
 type Source struct {
@@ -25,26 +28,24 @@ type Source struct {
 	Table            string `yaml:"table"`
 }
 
-type Collector struct {
-	Type string `yaml:"type"`
-}
-
-type S3 struct {
-	Bucket string `yaml:"bucket"`
-	Region string `yaml:"region"`
-}
-
 type Repository struct {
-	Bucket   string `yaml:"bucket"`
-	Region   string `yaml:"region"`
-	Prefix   string `yaml:"prefix"`
-	Endpoint string `yaml:"endpoint"`
+	Bucket         string `yaml:"bucket"`
+	Region         string `yaml:"region"`
+	Prefix         string `yaml:"prefix"`
+	Endpoint       string `yaml:"endpoint"`
+	ForcePathStyle bool   `yaml:"force_path_style"`
+}
+
+type Field struct {
+	Name          string `yaml:"name"`
+	Type          string `yaml:"type"`
+	ConvertedType string `yaml:"converted_type"`
 }
 
 type Preserver struct {
-	Type      string `yaml:"type"`
-	BatchSize int    `yaml:"batch_size"`
-	Schema    string `yaml:"schema"`
+	Type      string  `yaml:"type"`
+	BatchSize int     `yaml:"batch_size"`
+	Schema    []Field `yaml:"schema"`
 }
 
 type Librarian struct {
@@ -64,4 +65,15 @@ func NewLibrarianFromFile(fpath string) (*Librarian, error) {
 	}
 
 	return &librarian, nil
+}
+
+func ParquetFields(fields []Field) []parquet.Field {
+	parquetFields := make([]parquet.Field, len(fields))
+	for i, field := range fields {
+		parquetFields[i] = parquet.Field{
+			Name: field.Name,
+			Type: field.Type,
+		}
+	}
+	return parquetFields
 }

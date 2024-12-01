@@ -5,14 +5,12 @@ archiver:
     schema: public
     table: users
 
-  collector:
-    type: snapshot
-
   repository:
     region: us-east-1
     bucket: librarian-test
     endpoint: 's3.localhost.localstack.cloud:4566'
     prefix: users
+    force_path_style: true
 
   preserver:
     type: parquet

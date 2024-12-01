@@ -6,7 +6,10 @@ import (
 
 	"github.com/turbolytics/librarian/internal/archiver"
 	"github.com/turbolytics/librarian/internal/config"
+	"github.com/turbolytics/librarian/internal/parquet"
 	"github.com/turbolytics/librarian/internal/postgres"
+	"github.com/turbolytics/librarian/internal/s3"
+
 	"go.uber.org/zap"
 )
 
@@ -20,7 +23,7 @@ func newInvokeCommand() *cobra.Command {
 			ctx := cmd.Context()
 			logger, _ := zap.NewDevelopment()
 			defer logger.Sync()
-			l := logger.Named("librarian.archiver.invoke")
+			l := logger.Named("archiver.invoke")
 			l.Info("starting archiver!")
 
 			c, err := config.NewLibrarianFromFile(configPath)
@@ -48,9 +51,30 @@ func newInvokeCommand() *cobra.Command {
 				postgres.WithTable(c.Archiver.Source.Table),
 			)
 
+			preserver := parquet.New(
+				parquet.WithLogger(l),
+				parquet.WithSchema(
+					config.ParquetFields(
+						c.Archiver.Preserver.Schema,
+					),
+				),
+				parquet.WithBatchSize(c.Archiver.Preserver.BatchSize),
+			)
+
+			s3 := s3.New(
+				s3.WithLogger(l),
+				s3.WithRegion(c.Archiver.Repository.Region),
+				s3.WithBucket(c.Archiver.Repository.Bucket),
+				s3.WithPrefix(c.Archiver.Repository.Prefix),
+				s3.WithEndpoint(c.Archiver.Repository.Endpoint),
+				s3.WithForcePathStyle(c.Archiver.Repository.ForcePathStyle),
+			)
+
 			a := archiver.New(
 				archiver.WithSource(source),
 				archiver.WithLogger(l),
+				archiver.WithPreserver(preserver),
+				archiver.WithRepository(s3),
 			)
 
 			defer a.Close(ctx)
