@@ -7,7 +7,7 @@ Think of Librarian as Kafka Connect CDC source for modern data world.
 ## What makes librarian Modern?
 
 - Librarian is distributed as a single binary with no external dependencies.
-- Librarian includes data oriented observability out of the box, including latency and completeness.
+- Librarian includes data-oriented observability out of the box, including latency and completeness.
 - Librarian is runnable as a daemon or as a batch process.
 
 ## What Makes libraian cloud-native?
@@ -24,5 +24,6 @@ Think of Librarian as Kafka Connect CDC source for modern data world.
 - [ ] Mongo Snapshot
 - [ ] Postgres CDC
 - [ ] Mongo CDC
-- [ ] Ephemeral change streams 
+- [ ] Ephemeral change streams
+- [ ] Debezium Messages Format Compatibility
 
