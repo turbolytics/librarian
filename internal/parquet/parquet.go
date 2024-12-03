@@ -3,46 +3,35 @@ package parquet
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"strings"
+	"github.com/google/uuid"
+	"path/filepath"
 
 	"github.com/turbolytics/librarian/internal"
 	"github.com/xitongsys/parquet-go/writer"
 	"go.uber.org/zap"
 )
 
-type Schema []Field
-
-func (s Schema) ToGoParquetSchema() []string {
-	schema := make([]string, len(s))
-	for i, field := range s {
-		parts := []string{
-			fmt.Sprintf("name=%s", field.Name),
-			fmt.Sprintf("type=%s", field.Type),
-		}
-		if field.ConvertedType != "" {
-			parts = append(parts, fmt.Sprintf("convertedtype=%s", field.ConvertedType))
-		}
-		schema[i] = strings.Join(parts, ", ")
-	}
-
-	fmt.Println("schema", schema)
-
-	return schema
-}
-
-type Field struct {
-	Name          string
-	Type          string
-	ConvertedType string
-}
-
 type Option func(*Preserver)
+
+/*
+Preservation is the active process of saving things.
+
+The preserver knows about buffering batch sizes and partitions.
+
+The preserver may support different encryption or compression requirements.
+
+Preservers may have a durable buffer, or an ephemeral buffer. It's up to the preserver to manage its buffer.
+
+Preservers blindly call into a repository as many or as little times as they need with concurrency or not.
+*/
 
 type Preserver struct {
 	// BatchSizeNumRecords int
 	Schema Schema
 
+	batch []*internal.Record
+
+	repository    internal.Repository
 	w             *writer.CSVWriter
 	currentBuffer *bytes.Buffer
 	logger        *zap.Logger
@@ -53,6 +42,9 @@ func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error
 		"preserving record",
 		zap.Any("record", record.Map()),
 	)
+
+	p.batch = append(p.batch, record)
+
 	// check if buffer is initialized
 	if p.currentBuffer == nil {
 		p.currentBuffer = &bytes.Buffer{}
@@ -67,14 +59,36 @@ func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error
 			return err
 		}
 	}
-	p.w.Write(record.Values())
+
+	row, err := p.Schema.RecordToParquetRow(record)
+	if err != nil {
+		return err
+	}
+
+	return p.w.Write(row)
+}
+
+func (p *Preserver) Flush(ctx context.Context) error {
+	if p.currentBuffer.Len() == 0 {
+		return nil
+	}
+
+	if err := p.w.WriteStop(); err != nil {
+		return err
+	}
+
+	path := filepath.Join(uuid.New().String(), "users.parquet")
+
+	p.logger.Info("flushing parquet file")
+	p.repository.Write(ctx, path, p.currentBuffer)
 
 	return nil
 }
 
-func (p *Preserver) Flush(ctx context.Context) error {
-	p.logger.Info("flushing parquet file")
-	return nil
+func WithRepository(repository internal.Repository) Option {
+	return func(p *Preserver) {
+		p.repository = repository
+	}
 }
 
 func WithLogger(logger *zap.Logger) Option {

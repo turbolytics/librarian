@@ -8,7 +8,6 @@ import (
 
 	"github.com/turbolytics/librarian/internal/parquet"
 	"github.com/turbolytics/librarian/internal/postgres"
-	"github.com/turbolytics/librarian/internal/s3"
 )
 
 type Option func(*Archiver)
@@ -31,17 +30,10 @@ func WithPreserver(preserver *parquet.Preserver) Option {
 	}
 }
 
-func WithRepository(repository *s3.S3) Option {
-	return func(a *Archiver) {
-		a.repository = repository
-	}
-}
-
 type Archiver struct {
-	logger     *zap.Logger
-	source     *postgres.Source
-	preserver  *parquet.Preserver
-	repository *s3.S3
+	logger    *zap.Logger
+	source    *postgres.Source
+	preserver *parquet.Preserver
 }
 
 func (a *Archiver) Close(ctx context.Context) error {

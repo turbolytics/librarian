@@ -5,45 +5,45 @@ import (
 	"go.uber.org/zap"
 )
 
-type Option func(*S3)
+type Option func(*Repository)
 
 func WithRegion(region string) Option {
-	return func(s *S3) {
-		s.Region = region
+	return func(r *Repository) {
+		r.Region = region
 	}
 }
 
 func WithBucket(bucket string) Option {
-	return func(s *S3) {
-		s.Bucket = bucket
+	return func(r *Repository) {
+		r.Bucket = bucket
 	}
 }
 
 func WithPrefix(prefix string) Option {
-	return func(s *S3) {
-		s.Prefix = prefix
+	return func(r *Repository) {
+		r.Prefix = prefix
 	}
 }
 
 func WithLogger(l *zap.Logger) Option {
-	return func(s *S3) {
-		s.logger = l
+	return func(r *Repository) {
+		r.logger = l
 	}
 }
 
 func WithForcePathStyle(forcePathStyle bool) Option {
-	return func(s *S3) {
-		s.ForcePathStyle = forcePathStyle
+	return func(r *Repository) {
+		r.ForcePathStyle = forcePathStyle
 	}
 }
 
 func WithEndpoint(endpoint string) Option {
-	return func(s *S3) {
-		s.Endpoint = endpoint
+	return func(r *Repository) {
+		r.Endpoint = endpoint
 	}
 }
 
-type S3 struct {
+type Repository struct {
 	logger   *zap.Logger
 	uploader *s3manager.Uploader
 
@@ -54,11 +54,11 @@ type S3 struct {
 	ForcePathStyle bool
 }
 
-func New(opts ...Option) *S3 {
-	s := &S3{}
+func New(opts ...Option) *Repository {
+	r := &Repository{}
 
 	for _, o := range opts {
-		o(s)
+		o(r)
 	}
-	return s
+	return r
 }

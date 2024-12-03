@@ -15,6 +15,10 @@ func NewRecord(fields []string, values []any) *Record {
 	}
 }
 
+func (r *Record) Len() int {
+	return len(r.fields)
+}
+
 func (r *Record) Values() []any {
 	return r.values
 }

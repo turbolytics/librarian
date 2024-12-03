@@ -1,14 +1,17 @@
 package archiver
 
 import (
+	"fmt"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/spf13/cobra"
 
+	"github.com/turbolytics/librarian/internal"
 	"github.com/turbolytics/librarian/internal/archiver"
 	"github.com/turbolytics/librarian/internal/config"
+	"github.com/turbolytics/librarian/internal/local"
 	"github.com/turbolytics/librarian/internal/parquet"
 	"github.com/turbolytics/librarian/internal/postgres"
-	"github.com/turbolytics/librarian/internal/s3"
 
 	"go.uber.org/zap"
 )
@@ -51,6 +54,18 @@ func newInvokeCommand() *cobra.Command {
 				postgres.WithTable(c.Archiver.Source.Table),
 			)
 
+			var repository internal.Repository
+			switch c.Archiver.Repository.Type {
+			case "local":
+
+				repository = local.New(
+					c.Archiver.Repository.LocalConfig.Path,
+					local.WithLogger(l),
+				)
+			default:
+				return fmt.Errorf("unknown repository type: %s", c.Archiver.Repository.Type)
+			}
+
 			preserver := parquet.New(
 				parquet.WithLogger(l),
 				parquet.WithSchema(
@@ -58,23 +73,26 @@ func newInvokeCommand() *cobra.Command {
 						c.Archiver.Preserver.Schema,
 					),
 				),
+				parquet.WithRepository(repository),
 				// parquet.WithBatchSizeNumRecords(c.Archiver.Preserver.BatchSizeNumRecords),
 			)
 
-			s3 := s3.New(
-				s3.WithLogger(l),
-				s3.WithRegion(c.Archiver.Repository.Region),
-				s3.WithBucket(c.Archiver.Repository.Bucket),
-				s3.WithPrefix(c.Archiver.Repository.Prefix),
-				s3.WithEndpoint(c.Archiver.Repository.Endpoint),
-				s3.WithForcePathStyle(c.Archiver.Repository.ForcePathStyle),
-			)
+			/*
+				s3 := s3.New(
+					s3.WithLogger(l),
+					s3.WithRegion(c.Archiver.Repository.Region),
+					s3.WithBucket(c.Archiver.Repository.Bucket),
+					s3.WithPrefix(c.Archiver.Repository.Prefix),
+					s3.WithEndpoint(c.Archiver.Repository.Endpoint),
+					s3.WithForcePathStyle(c.Archiver.Repository.ForcePathStyle),
+				)
+			*/
 
 			a := archiver.New(
 				archiver.WithLogger(l),
 				archiver.WithSource(source),
 				archiver.WithPreserver(preserver),
-				archiver.WithRepository(s3),
+				// archiver.WithRepository(s3),
 			)
 
 			defer a.Close(ctx)
