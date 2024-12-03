@@ -13,7 +13,7 @@ Think of Librarian as Kafka Connect CDC source for modern data world.
 ## What Makes libraian cloud-native?
 
 - Librarian includes modern telemetry including metrics and tracing natively. 
-- Librarian is performant and efficient, deployable on small instances. 
+- Librarian is performant and efficient, deployable on modest hardware instances. 
 
 
 # Features and Roadmap.
