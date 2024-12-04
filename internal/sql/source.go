@@ -1,35 +1,34 @@
-package postgres
+package sql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/turbolytics/librarian/internal"
 )
 
 type Source struct {
-	Conn   *pgx.Conn
+	DB     *sql.DB
 	Schema string
 	Table  string
 }
 
 func (s *Source) Close(ctx context.Context) error {
-	return s.Conn.Close(ctx)
+	return s.DB.Close()
 }
 
-type snapshot struct {
-	rows    pgx.Rows
+type Snapshot struct {
+	rows    *sql.Rows
 	columns []string
 }
 
-func (s *snapshot) Close() error {
-	s.rows.Close()
-	return nil
+func (s *Snapshot) Close() error {
+	return s.rows.Close()
 }
 
-func (s *snapshot) Next() (*internal.Record, error) {
+func (s *Snapshot) Next() (*internal.Record, error) {
 	row := s.rows.Next()
 	if !row {
 		return nil, io.EOF
@@ -51,21 +50,24 @@ func (s *snapshot) Next() (*internal.Record, error) {
 	return record, nil
 }
 
-func (s *Source) Snapshot(ctx context.Context) (*snapshot, error) {
+func (s *Source) Snapshot(ctx context.Context) (*Snapshot, error) {
 	query := fmt.Sprintf("SELECT * FROM %s.%s", s.Schema, s.Table)
-	rows, err := s.Conn.Query(ctx, query)
+	rows, err := s.DB.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	fields := rows.FieldDescriptions()
-
-	columns := make([]string, len(fields))
-	for i, fd := range fields {
-		columns[i] = string(fd.Name)
+	fields, err := rows.Columns()
+	if err != nil {
+		return nil, err
 	}
 
-	return &snapshot{
+	columns := make([]string, len(fields))
+	for i, name := range fields {
+		columns[i] = string(name)
+	}
+
+	return &Snapshot{
 		rows:    rows,
 		columns: columns,
 	}, nil
@@ -85,8 +87,10 @@ func WithTable(table string) SourceOption {
 	}
 }
 
-func NewSource(conn *pgx.Conn, opts ...SourceOption) *Source {
-	s := Source{Conn: conn}
+func NewSource(db *sql.DB, opts ...SourceOption) *Source {
+	s := Source{
+		DB: db,
+	}
 	for _, opt := range opts {
 		opt(&s)
 	}

@@ -1,9 +1,8 @@
 package archiver
 
 import (
+	"database/sql"
 	"fmt"
-
-	"github.com/jackc/pgx/v5"
 	"github.com/spf13/cobra"
 
 	"github.com/turbolytics/librarian/internal"
@@ -11,7 +10,9 @@ import (
 	"github.com/turbolytics/librarian/internal/config"
 	"github.com/turbolytics/librarian/internal/local"
 	"github.com/turbolytics/librarian/internal/parquet"
-	"github.com/turbolytics/librarian/internal/postgres"
+	lsql "github.com/turbolytics/librarian/internal/sql"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"go.uber.org/zap"
 )
@@ -36,22 +37,21 @@ func newInvokeCommand() *cobra.Command {
 
 			l.Info("config", zap.Any("config", c))
 
-			conn, err := pgx.Connect(
-				ctx,
-				c.Archiver.Source.ConnectionString,
-			)
+			db, err := sql.Open("pgx", c.Archiver.Source.ConnectionString)
 			if err != nil {
 				return err
 			}
 
-			if err := conn.Ping(ctx); err != nil {
+			defer db.Close()
+
+			if err := db.PingContext(ctx); err != nil {
 				return err
 			}
 
-			source := postgres.NewSource(
-				conn,
-				postgres.WithSchema(c.Archiver.Source.Schema),
-				postgres.WithTable(c.Archiver.Source.Table),
+			source := lsql.NewSource(
+				db,
+				lsql.WithSchema(c.Archiver.Source.Schema),
+				lsql.WithTable(c.Archiver.Source.Table),
 			)
 
 			var repository internal.Repository
