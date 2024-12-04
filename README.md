@@ -19,6 +19,7 @@ Think of Librarian as Kafka Connect CDC source for modern data world.
 # Features and Roadmap.
 - [x] Postgres Snapshot
 - [x] Parquet Serialization
+- [ ] Parquet Automatic Schema Detection
 - [ ] S3 Persistence
 - [ ] Data Observability - Latency & Completeness
 - [ ] Mongo Snapshot
