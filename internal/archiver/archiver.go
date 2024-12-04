@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/turbolytics/librarian/internal/parquet"
-	"github.com/turbolytics/librarian/internal/postgres"
+	"github.com/turbolytics/librarian/internal/sql"
 )
 
 type Option func(*Archiver)
@@ -18,7 +18,7 @@ func WithLogger(logger *zap.Logger) Option {
 	}
 }
 
-func WithSource(source *postgres.Source) Option {
+func WithSource(source *sql.Source) Option {
 	return func(a *Archiver) {
 		a.source = source
 	}
@@ -32,7 +32,7 @@ func WithPreserver(preserver *parquet.Preserver) Option {
 
 type Archiver struct {
 	logger    *zap.Logger
-	source    *postgres.Source
+	source    *sql.Source
 	preserver *parquet.Preserver
 }
 
