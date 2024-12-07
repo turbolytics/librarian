@@ -12,7 +12,14 @@ type Option func(*Repository)
 
 type Repository struct {
 	basePath string
+	prefix   string
 	logger   *zap.Logger
+}
+
+func WithPrefix(prefix string) Option {
+	return func(r *Repository) {
+		r.prefix = prefix
+	}
 }
 
 func WithLogger(logger *zap.Logger) Option {
@@ -22,7 +29,10 @@ func WithLogger(logger *zap.Logger) Option {
 }
 
 func New(basePath string, opts ...Option) *Repository {
-	r := &Repository{basePath: basePath}
+	r := &Repository{
+		basePath: basePath,
+	}
+
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -30,7 +40,11 @@ func New(basePath string, opts ...Option) *Repository {
 }
 
 func (r *Repository) Write(ctx context.Context, path string, reader io.Reader) error {
-	fullPath := filepath.Join(r.basePath, path)
+	fullPath := filepath.Join(
+		r.basePath,
+		r.prefix,
+		path,
+	)
 	r.logger.Info("writing file", zap.String("path", fullPath))
 
 	// Ensure directory exists

@@ -1,6 +1,9 @@
 package catalog
 
-import "time"
+import (
+	"github.com/google/uuid"
+	"time"
+)
 
 /*
 The catalog is a record of what has been processed.
@@ -10,6 +13,7 @@ data operations.
 
 // Catalog represents the catalog of records that have been processed
 type Catalog struct {
+	ID                  uuid.UUID `json:"id"`
 	StartTime           time.Time `json:"start_time"`
 	EndTime             time.Time `json:"end_time"`
 	Source              string    `json:"source"`
