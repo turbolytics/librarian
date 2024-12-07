@@ -1,8 +1,13 @@
 package archiver
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"github.com/turbolytics/librarian/internal"
+	"github.com/turbolytics/librarian/internal/catalog"
 	"io"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -30,17 +35,44 @@ func WithPreserver(preserver *parquet.Preserver) Option {
 	}
 }
 
+func WithRepository(repository internal.Repository) Option {
+	return func(a *Archiver) {
+		a.repository = repository
+	}
+}
+
 type Archiver struct {
-	logger    *zap.Logger
-	source    *sql.Source
-	preserver *parquet.Preserver
+	logger     *zap.Logger
+	source     *sql.Source
+	preserver  *parquet.Preserver
+	repository internal.Repository
 }
 
 func (a *Archiver) Close(ctx context.Context) error {
 	return a.source.Close(ctx)
 }
 
-func (a *Archiver) Run(ctx context.Context) error {
+func (a *Archiver) Snapshot(ctx context.Context) error {
+	// Initialize the catalog
+	clog := catalog.Catalog{
+		StartTime: time.Now().UTC(),
+		Source:    a.source.Name(),
+	}
+
+	expectedRows, err := a.source.Count(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	clog.NumSourceRecords = expectedRows
+
+	a.logger.Info(
+		"source snapshot",
+		zap.String("source", a.source.Name()),
+		zap.Int("expected_rows", expectedRows),
+	)
+
 	// 1. Collect data from source
 	snapshot, err := a.source.Snapshot(ctx)
 	if err != nil {
@@ -68,8 +100,27 @@ func (a *Archiver) Run(ctx context.Context) error {
 		}
 	}
 
-	// 3. Flush data to repository
-	return a.preserver.Flush(ctx)
+	// 3. Signal that processing is done.
+	if err = a.preserver.Flush(ctx); err != nil {
+		return err
+	}
+
+	// 4. Update and flush catalog
+	clog.NumRecordsProcessed = a.preserver.NumRecordsProcessed()
+	clog.Completed = true
+	clog.EndTime = time.Now().UTC()
+	a.logger.Info("catalog", zap.Any("catalog", clog))
+
+	bs, err := json.Marshal(clog)
+	if err != nil {
+		return err
+	}
+
+	return a.repository.Write(
+		ctx,
+		"catalog.json",
+		bytes.NewReader(bs),
+	)
 }
 
 func New(opts ...Option) *Archiver {

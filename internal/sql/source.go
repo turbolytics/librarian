@@ -13,6 +13,22 @@ type Source struct {
 	DB     *sql.DB
 	Schema string
 	Table  string
+	Query  string
+}
+
+func (s *Source) Name() string {
+	return fmt.Sprintf("%s.%s", s.Schema, s.Table)
+}
+
+// Count returns the expected count of records in the snapshot
+// TODO this should be executed in the same transaction that the
+// actual snapshot is executed in for correctness.
+func (s *Source) Count(ctx context.Context) (int, error) {
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM (%s)`, s.Query)
+	row := s.DB.QueryRowContext(ctx, query)
+	var c int
+	err := row.Scan(&c)
+	return c, err
 }
 
 func (s *Source) Close(ctx context.Context) error {
@@ -22,6 +38,11 @@ func (s *Source) Close(ctx context.Context) error {
 type Snapshot struct {
 	rows    *sql.Rows
 	columns []string
+	query   string
+}
+
+func (s *Snapshot) Query() string {
+	return s.query
 }
 
 func (s *Snapshot) Close() error {
@@ -70,6 +91,7 @@ func (s *Source) Snapshot(ctx context.Context) (*Snapshot, error) {
 	return &Snapshot{
 		rows:    rows,
 		columns: columns,
+		query:   s.Query,
 	}, nil
 }
 
@@ -87,12 +109,24 @@ func WithTable(table string) SourceOption {
 	}
 }
 
+func WithQuery(query string) SourceOption {
+	return func(s *Source) {
+		s.Query = query
+	}
+}
+
 func NewSource(db *sql.DB, opts ...SourceOption) *Source {
 	s := Source{
 		DB: db,
 	}
+
 	for _, opt := range opts {
 		opt(&s)
 	}
+
+	if s.Query == "" {
+		s.Query = fmt.Sprintf("SELECT * FROM %s.%s", s.Schema, s.Table)
+	}
+
 	return &s
 }
