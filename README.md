@@ -7,6 +7,7 @@ Think of Librarian as Kafka Connect CDC source for modern data world.
 ## What makes librarian Modern?
 
 - Librarian is distributed as a single binary with no external dependencies.
+- Librarian includes data integrity checks to ensure correctness.
 - Librarian includes data-oriented observability out of the box, including latency and completeness.
 - Librarian is runnable as a daemon or as a batch process.
 
