@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/google/uuid"
 	"github.com/turbolytics/librarian/internal"
 	"github.com/turbolytics/librarian/internal/catalog"
 	"io"
@@ -52,9 +53,10 @@ func (a *Archiver) Close(ctx context.Context) error {
 	return a.source.Close(ctx)
 }
 
-func (a *Archiver) Snapshot(ctx context.Context) error {
+func (a *Archiver) Snapshot(ctx context.Context, id uuid.UUID) error {
 	// Initialize the catalog
 	clog := catalog.Catalog{
+		ID:        id,
 		StartTime: time.Now().UTC(),
 		Source:    a.source.Name(),
 	}

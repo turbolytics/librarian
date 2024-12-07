@@ -3,6 +3,7 @@ package archiver
 import (
 	"database/sql"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"github.com/turbolytics/librarian/internal"
@@ -29,6 +30,8 @@ func newInvokeCommand() *cobra.Command {
 			defer logger.Sync()
 			l := logger.Named("archiver.snaphot")
 			l.Info("starting archiver!")
+
+			sid := uuid.Must(uuid.NewUUID())
 
 			c, err := config.NewLibrarianFromFile(configPath)
 			if err != nil {
@@ -57,9 +60,9 @@ func newInvokeCommand() *cobra.Command {
 			var repository internal.Repository
 			switch c.Archiver.Repository.Type {
 			case "local":
-
 				repository = local.New(
 					c.Archiver.Repository.LocalConfig.Path,
+					local.WithPrefix(sid.String()),
 					local.WithLogger(l),
 				)
 			default:
@@ -97,7 +100,7 @@ func newInvokeCommand() *cobra.Command {
 
 			defer a.Close(ctx)
 
-			if err := a.Snapshot(ctx); err != nil {
+			if err := a.Snapshot(ctx, sid); err != nil {
 				return err
 			}
 

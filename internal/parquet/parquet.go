@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"github.com/google/uuid"
-	"path/filepath"
-
 	"github.com/turbolytics/librarian/internal"
 	"github.com/xitongsys/parquet-go/writer"
 	"go.uber.org/zap"
@@ -42,11 +40,6 @@ func (p *Preserver) NumRecordsProcessed() int {
 }
 
 func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error {
-	p.logger.Debug(
-		"preserving record",
-		zap.Any("record", record.Map()),
-	)
-
 	// check if buffer is initialized
 	if p.currentBuffer == nil {
 		p.currentBuffer = &bytes.Buffer{}
@@ -80,13 +73,13 @@ func (p *Preserver) Flush(ctx context.Context) error {
 		return err
 	}
 
-	path := filepath.Join(uuid.New().String(), "users.parquet")
+	file := uuid.New().String() + ".parquet"
 
 	p.logger.Debug(
 		"flushing parquet file",
-		zap.String("path", path),
+		zap.String("file", file),
 	)
-	return p.repository.Write(ctx, path, p.currentBuffer)
+	return p.repository.Write(ctx, file, p.currentBuffer)
 }
 
 func WithRepository(repository internal.Repository) Option {
