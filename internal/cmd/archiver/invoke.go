@@ -21,13 +21,13 @@ func newInvokeCommand() *cobra.Command {
 	var configPath string
 
 	cmd := &cobra.Command{
-		Use:   "invoke",
-		Short: "Invokes the archival of data. Data is collected from the source and preserved.",
+		Use:   "snapshot",
+		Short: "Invokes a snapshot. Data is collected from the source and preserved.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			logger, _ := zap.NewDevelopment()
 			defer logger.Sync()
-			l := logger.Named("archiver.invoke")
+			l := logger.Named("archiver.snaphot")
 			l.Info("starting archiver!")
 
 			c, err := config.NewLibrarianFromFile(configPath)
@@ -92,12 +92,12 @@ func newInvokeCommand() *cobra.Command {
 				archiver.WithLogger(l),
 				archiver.WithSource(source),
 				archiver.WithPreserver(preserver),
-				// archiver.WithRepository(s3),
+				archiver.WithRepository(repository),
 			)
 
 			defer a.Close(ctx)
 
-			if err := a.Run(ctx); err != nil {
+			if err := a.Snapshot(ctx); err != nil {
 				return err
 			}
 

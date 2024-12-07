@@ -42,6 +42,7 @@ func (s Schema) RecordToParquetRow(r *internal.Record) ([]any, error) {
 
 	row := make([]any, len(s))
 	values := r.Values()
+
 	for i, field := range s {
 		// apply the mapper functions
 		row[i] = values[i]

@@ -29,12 +29,16 @@ type Preserver struct {
 	// BatchSizeNumRecords int
 	Schema Schema
 
-	batch []*internal.Record
-
 	repository    internal.Repository
 	w             *writer.CSVWriter
 	currentBuffer *bytes.Buffer
 	logger        *zap.Logger
+
+	numRecordsProcessed int
+}
+
+func (p *Preserver) NumRecordsProcessed() int {
+	return p.numRecordsProcessed
 }
 
 func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error {
@@ -42,8 +46,6 @@ func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error
 		"preserving record",
 		zap.Any("record", record.Map()),
 	)
-
-	p.batch = append(p.batch, record)
 
 	// check if buffer is initialized
 	if p.currentBuffer == nil {
@@ -65,6 +67,7 @@ func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error
 		return err
 	}
 
+	p.numRecordsProcessed++
 	return p.w.Write(row)
 }
 
@@ -79,10 +82,11 @@ func (p *Preserver) Flush(ctx context.Context) error {
 
 	path := filepath.Join(uuid.New().String(), "users.parquet")
 
-	p.logger.Info("flushing parquet file")
-	p.repository.Write(ctx, path, p.currentBuffer)
-
-	return nil
+	p.logger.Debug(
+		"flushing parquet file",
+		zap.String("path", path),
+	)
+	return p.repository.Write(ctx, path, p.currentBuffer)
 }
 
 func WithRepository(repository internal.Repository) Option {
