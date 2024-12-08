@@ -3,7 +3,6 @@ package parquet
 import (
 	"fmt"
 	"github.com/turbolytics/librarian/internal"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -62,41 +61,37 @@ func (s Schema) RecordToParquetRow(r *internal.Record) ([]any, error) {
 	values := r.Values()
 
 	for i, field := range s {
-		// apply the mapper functions
-		row[i] = values[i]
-
-		// What could go wrong :joy:
-
-		// The goal is to make SQL data types work with parquet data types
-		// There are logical SQL Datatypes (such as DECIMAL) backed by go types (float64)
-		// that need to be converted to parquet data types.
-		// TODO create a table of type conversions
-		switch field.ConvertedType {
-		case "DATE":
-			if values[i] != nil {
-				row[i] = int32(values[i].(time.Time).Unix())
-			}
-		case "DECIMAL":
-			fmt.Printf(
-				"name=%q value=%q type=%q\n",
-				field.Name,
-				values[i],
-				reflect.TypeOf(values[i]),
-			)
-			switch v := values[i].(type) {
-			case float64:
-				str1 := strconv.FormatFloat(
-					v,
-					'f',
-					*field.Precision,
-					64,
-				)
-				row[i] = str1
-			}
-		case "TIMESTAMP_MICROS":
-			row[i] = values[i].(time.Time).UnixMicro()
+		pv, err := dbValueToParquetValue(values[i], field)
+		if err != nil {
+			return nil, err
 		}
+		row[i] = pv
 	}
 
 	return row, nil
+}
+
+func dbValueToParquetValue(v any, field Field) (any, error) {
+	switch field.ConvertedType {
+	case "DATE":
+		if v != nil {
+			return int32(v.(time.Time).Unix()), nil
+		}
+	case "DECIMAL":
+		switch typedv := v.(type) {
+		case string:
+			// map DECIMAL (string) to an Integer
+			i, err := strconv.ParseInt(strings.Replace(typedv, ".", "", -1), 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			return i, nil
+		}
+	case "TIMESTAMP_MICROS":
+		return v.(time.Time).UnixMicro(), nil
+	default:
+		return v, nil
+	}
+
+	return nil, nil
 }
