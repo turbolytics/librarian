@@ -48,9 +48,8 @@ archiver:
 #        repetition_type: OPTIONAL
 
       - name: assessed_value
-        type: FIXED_LEN_BYTE_ARRAY
+        type: BYTE_ARRAY
         converted_type: DECIMAL
-        length: 12
         precision: 12
         scale: 2
 
