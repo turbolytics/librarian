@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/turbolytics/librarian/internal"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -86,18 +87,20 @@ func dbValueToParquetValue(v any, field Field) (any, error) {
 		)
 		switch typedv := v.(type) {
 		case string:
-			bs, err := StringToDECIMAL_BYTE_ARRAY(typedv, *field.Precision, *field.Scale)
+			// map DECIMAL (string) to an Integer
+			i, err := strconv.ParseInt(strings.Replace(typedv, ".", "", -1), 10, 64)
 			if err != nil {
 				return nil, err
 			}
+
 			fmt.Printf(
-				"name=%q value=%q type=%q\n converted=%q\n",
+				"name=%q value=%q type=%q\n converted=%d\n",
 				field.Name,
 				v,
 				reflect.TypeOf(v),
-				string(bs),
+				i,
 			)
-			return string(bs), nil
+			return i, nil
 		}
 	case "TIMESTAMP_MICROS":
 		return v.(time.Time).UnixMicro(), nil
