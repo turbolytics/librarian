@@ -3,7 +3,6 @@ package parquet
 import (
 	"fmt"
 	"github.com/turbolytics/librarian/internal"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -79,12 +78,6 @@ func dbValueToParquetValue(v any, field Field) (any, error) {
 			return int32(v.(time.Time).Unix()), nil
 		}
 	case "DECIMAL":
-		fmt.Printf(
-			"name=%q value=%q type=%q\n",
-			field.Name,
-			v,
-			reflect.TypeOf(v),
-		)
 		switch typedv := v.(type) {
 		case string:
 			// map DECIMAL (string) to an Integer
@@ -92,14 +85,6 @@ func dbValueToParquetValue(v any, field Field) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-
-			fmt.Printf(
-				"name=%q value=%q type=%q\n converted=%d\n",
-				field.Name,
-				v,
-				reflect.TypeOf(v),
-				i,
-			)
 			return i, nil
 		}
 	case "TIMESTAMP_MICROS":

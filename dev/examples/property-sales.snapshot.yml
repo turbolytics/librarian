@@ -6,10 +6,22 @@ archiver:
     table: property_sales
     query: |
       SELECT 
-        assessed_value
+        serial_number, 
+        list_year, 
+        date_recorded, 
+        town, 
+        address, 
+        assessed_value, 
+        sale_amount, 
+        sales_ratio, 
+        property_type, 
+        residential_type, 
+        non_use_code, 
+        assessor_remarks, 
+        opm_remarks, 
+        location
       FROM property_sales 
       ORDER BY serial_number 
-      LIMIT 10
 
   repository:
     type: local
@@ -27,25 +39,25 @@ archiver:
   preserver:
     type: parquet
     schema:
-#      - name: serial_number
-#        type: INT64
-#
-#      - name: list_year
-#        type: INT64
-#
-#      - name: date_recorded
-#        type: INT32
-#        converted_type: DATE
-#        repetition_type: OPTIONAL
-#
-#      - name: town
-#        type: BYTE_ARRAY
-#        converted_type: UTF8
-#
-#      - name: address
-#        type: BYTE_ARRAY
-#        converted_type: UTF8
-#        repetition_type: OPTIONAL
+      - name: serial_number
+        type: INT64
+
+      - name: list_year
+        type: INT64
+
+      - name: date_recorded
+        type: INT32
+        converted_type: DATE
+        repetition_type: OPTIONAL
+
+      - name: town
+        type: BYTE_ARRAY
+        converted_type: UTF8
+
+      - name: address
+        type: BYTE_ARRAY
+        converted_type: UTF8
+        repetition_type: OPTIONAL
 
       - name: assessed_value
         type: INT64
@@ -53,44 +65,44 @@ archiver:
         precision: 12
         scale: 2
 
-#      - name: sale_amount
-#        type: BYTE_ARRAY
-#        converted_type: DECIMAL
-#        precision: 12
-#        scale: 3
-#
-#      - name: sales_ratio
-#        type: BYTE_ARRAY
-#        converted_type: DECIMAL
-#        precision: 10
-#        scale: 5
-#
-#      - name: property_type
-#        type: BYTE_ARRAY
-#        converted_type: UTF8
-#        repetition_type: OPTIONAL
-#
-#      - name: residential_type
-#        type: BYTE_ARRAY
-#        converted_type: UTF8
-#        repetition_type: OPTIONAL
-#
-#      - name: non_use_code
-#        type: BYTE_ARRAY
-#        converted_type: UTF8
-#        repetition_type: OPTIONAL
-#
-#      - name: assessor_remarks
-#        type: BYTE_ARRAY
-#        converted_type: UTF8
-#        repetition_type: OPTIONAL
-#
-#      - name: opm_remarks
-#        type: BYTE_ARRAY
-#        converted_type: UTF8
-#        repetition_type: OPTIONAL
-#
-#      - name: location
-#        type: BYTE_ARRAY
-#        converted_type: UTF8
-#        repetition_type: OPTIONAL
+      - name: sale_amount
+        type: INT64
+        converted_type: DECIMAL
+        precision: 12
+        scale: 3
+
+      - name: sales_ratio
+        type: INT64
+        converted_type: DECIMAL
+        precision: 10
+        scale: 5
+
+      - name: property_type
+        type: BYTE_ARRAY
+        converted_type: UTF8
+        repetition_type: OPTIONAL
+
+      - name: residential_type
+        type: BYTE_ARRAY
+        converted_type: UTF8
+        repetition_type: OPTIONAL
+
+      - name: non_use_code
+        type: BYTE_ARRAY
+        converted_type: UTF8
+        repetition_type: OPTIONAL
+
+      - name: assessor_remarks
+        type: BYTE_ARRAY
+        converted_type: UTF8
+        repetition_type: OPTIONAL
+
+      - name: opm_remarks
+        type: BYTE_ARRAY
+        converted_type: UTF8
+        repetition_type: OPTIONAL
+
+      - name: location
+        type: BYTE_ARRAY
+        converted_type: UTF8
+        repetition_type: OPTIONAL

@@ -3,7 +3,6 @@ package parquet
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/turbolytics/librarian/internal"
 	"github.com/xitongsys/parquet-go/writer"
@@ -41,7 +40,6 @@ func (p *Preserver) NumRecordsProcessed() int {
 }
 
 func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error {
-	fmt.Printf("%v\n", record)
 	// check if buffer is initialized
 	if p.currentBuffer == nil {
 		p.currentBuffer = &bytes.Buffer{}
