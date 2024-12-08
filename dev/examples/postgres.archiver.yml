@@ -1,5 +1,5 @@
 archiver:
-  name: postgres-example-1
+  name: postgres-users-example
   source:
     connection_string: "postgresql://test:test@localhost:5432/test?sslmode=disable"
     schema: public
@@ -27,7 +27,4 @@ archiver:
         converted_type: UTF8
       - name: signup_time
         type: INT64
-        converted_type: TIMESTAMP_MICROS 
-
-        
-
+        converted_type: TIMESTAMP_MICROS

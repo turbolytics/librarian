@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 
 	"github.com/turbolytics/librarian/internal"
@@ -14,6 +15,8 @@ type Source struct {
 	Schema string
 	Table  string
 	Query  string
+
+	logger *zap.Logger
 }
 
 func (s *Source) Name() string {
@@ -72,11 +75,28 @@ func (s *Snapshot) Next() (*internal.Record, error) {
 }
 
 func (s *Source) Snapshot(ctx context.Context) (*Snapshot, error) {
-	query := fmt.Sprintf("SELECT * FROM %s.%s", s.Schema, s.Table)
-	rows, err := s.DB.QueryContext(ctx, query)
+	s.logger.Info("taking snapshot", zap.String("query", s.Query))
+	rows, err := s.DB.QueryContext(ctx, s.Query)
 	if err != nil {
 		return nil, err
 	}
+
+	cts, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, err
+	}
+	columnTypes := make([]string, len(cts))
+	dbTypes := make([]string, len(cts))
+	for _, ct := range cts {
+		columnTypes = append(columnTypes, ct.ScanType().Name())
+		dbTypes = append(dbTypes, ct.DatabaseTypeName())
+	}
+
+	s.logger.Debug(
+		"snapshot row types",
+		zap.Any("column_types", columnTypes),
+		zap.Any("db_types", dbTypes),
+	)
 
 	fields, err := rows.Columns()
 	if err != nil {
@@ -100,6 +120,12 @@ type SourceOption func(*Source)
 func WithSchema(schema string) SourceOption {
 	return func(s *Source) {
 		s.Schema = schema
+	}
+}
+
+func WithLogger(logger *zap.Logger) SourceOption {
+	return func(s *Source) {
+		s.logger = logger
 	}
 }
 

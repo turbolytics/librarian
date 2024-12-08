@@ -26,6 +26,7 @@ type Source struct {
 	ConnectionString string `yaml:"connection_string"`
 	Schema           string `yaml:"schema"`
 	Table            string `yaml:"table"`
+	Query            string `yaml:"query"`
 }
 
 type Repository struct {
@@ -44,9 +45,13 @@ type Repository struct {
 }
 
 type Field struct {
-	Name          string `yaml:"name"`
-	Type          string `yaml:"type"`
-	ConvertedType string `yaml:"converted_type"`
+	Name           string `yaml:"name"`
+	Type           string `yaml:"type"`
+	ConvertedType  string `yaml:"converted_type"`
+	RepetitionType string `yaml:"repetition_type"`
+	Scale          *int   `yaml:"scale"`
+	Precision      *int   `yaml:"precision"`
+	Length         *int   `yaml:"length"`
 }
 
 type Preserver struct {
@@ -78,12 +83,19 @@ func ParquetFields(fields []Field) []parquet.Field {
 	parquetFields := make([]parquet.Field, len(fields))
 	for i, field := range fields {
 		pf := parquet.Field{
-			Name: field.Name,
-			Type: field.Type,
+			Name:      field.Name,
+			Type:      field.Type,
+			Scale:     field.Scale,
+			Precision: field.Precision,
+			Length:    field.Length,
 		}
 		if field.ConvertedType != "" {
 			pf.ConvertedType = field.ConvertedType
 		}
+		if field.RepetitionType != "" {
+			pf.RepetitionType = field.RepetitionType
+		}
+
 		parquetFields[i] = pf
 	}
 

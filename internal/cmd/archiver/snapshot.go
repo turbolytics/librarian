@@ -38,8 +38,6 @@ func newInvokeCommand() *cobra.Command {
 				return err
 			}
 
-			l.Info("config", zap.Any("config", c))
-
 			db, err := sql.Open("pgx", c.Archiver.Source.ConnectionString)
 			if err != nil {
 				return err
@@ -55,6 +53,8 @@ func newInvokeCommand() *cobra.Command {
 				db,
 				lsql.WithSchema(c.Archiver.Source.Schema),
 				lsql.WithTable(c.Archiver.Source.Table),
+				lsql.WithQuery(c.Archiver.Source.Query),
+				lsql.WithLogger(l),
 			)
 
 			var repository internal.Repository

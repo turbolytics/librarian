@@ -10,6 +10,7 @@ services:
       POSTGRES_DB: test
     volumes:
       - ./postgres/migrations:/docker-entrypoint-initdb.d
+      - ./data:/tmp/data
 
   localstack:
     container_name: "${LOCALSTACK_DOCKER_NAME:-localstack-main}"
