@@ -114,7 +114,7 @@ func New(opts ...Option) *Preserver {
 		opt(p)
 	}
 
-	p.logger.Info(
+	p.logger.Debug(
 		"parquet preserver initialized",
 		zap.Any("schema", p.Schema),
 		zap.Any("go-parquet", p.Schema.ToGoParquetSchema()),
