@@ -38,7 +38,7 @@ archiver:
 
   preserver:
     type: parquet
-    batch_size_num_records: 100000000
+    batch_size_num_records: 500000
     parquet:
       schema:
         - name: serial_number

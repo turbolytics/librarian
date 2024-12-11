@@ -75,7 +75,17 @@ func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error
 	}
 
 	p.numRecordsProcessed++
-	return p.w.Write(row)
+	if err := p.w.Write(row); err != nil {
+		return err
+	}
+
+	if (p.numRecordsProcessed % p.batchSizeNumRecords) == 0 {
+		if err := p.Flush(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (p *Preserver) Flush(ctx context.Context) error {
