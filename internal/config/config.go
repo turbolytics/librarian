@@ -56,8 +56,13 @@ type Field struct {
 
 type Preserver struct {
 	Type string `yaml:"type"`
-	// BatchSizeNumRecords int     `yaml:"batch_size_num_records"`
-	Schema []Field `yaml:"schema"`
+
+	// BatchSizeNumRecords specifies the number of records
+	// that will be contained in each file part.
+	BatchSizeNumRecords int `yaml:"batch_size_num_records"`
+	Parquet             struct {
+		Schema []Field `yaml:"schema"`
+	} `yaml:"parquet"`
 }
 
 type Librarian struct {

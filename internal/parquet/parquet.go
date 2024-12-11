@@ -7,6 +7,7 @@ import (
 	"github.com/turbolytics/librarian/internal"
 	"github.com/xitongsys/parquet-go/writer"
 	"go.uber.org/zap"
+	"io"
 )
 
 type Option func(*Preserver)
@@ -27,10 +28,13 @@ type Preserver struct {
 	// BatchSizeNumRecords int
 	Schema Schema
 
-	repository    internal.Repository
-	w             *writer.CSVWriter
-	currentBuffer *bytes.Buffer
-	logger        *zap.Logger
+	batchSizeNumRecords int
+
+	buf *bytes.Buffer
+
+	logger     *zap.Logger
+	repository internal.Repository
+	w          *writer.CSVWriter
 
 	numRecordsProcessed int
 }
@@ -39,39 +43,7 @@ func (p *Preserver) NumRecordsProcessed() int {
 	return p.numRecordsProcessed
 }
 
-func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error {
-	// check if buffer is initialized
-	if p.currentBuffer == nil {
-		p.currentBuffer = &bytes.Buffer{}
-
-		var err error
-		p.w, err = writer.NewCSVWriterFromWriter(
-			p.Schema.ToGoParquetSchema(),
-			p.currentBuffer,
-			4,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	row, err := p.Schema.RecordToParquetRow(record)
-	if err != nil {
-		return err
-	}
-
-	p.numRecordsProcessed++
-	return p.w.Write(row)
-}
-
-func (p *Preserver) Flush(ctx context.Context) error {
-	if p.currentBuffer.Len() == 0 {
-		return nil
-	}
-
-	if err := p.w.WriteStop(); err != nil {
-		return err
-	}
+func (p *Preserver) flush(ctx context.Context, r io.Reader) error {
 
 	file := uuid.New().String() + ".parquet"
 
@@ -79,7 +51,65 @@ func (p *Preserver) Flush(ctx context.Context) error {
 		"flushing parquet file",
 		zap.String("file", file),
 	)
-	return p.repository.Write(ctx, file, p.currentBuffer)
+	return p.repository.Write(ctx, file, r)
+}
+
+func (p *Preserver) initWriter() error {
+	p.buf = &bytes.Buffer{}
+
+	var err error
+	p.w, err = writer.NewCSVWriterFromWriter(
+		p.Schema.ToGoParquetSchema(),
+		p.buf,
+		4,
+	)
+
+	return err
+}
+
+// Preserve serializes a record to a parquet file.
+func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error {
+	row, err := p.Schema.RecordToParquetRow(record)
+	if err != nil {
+		return err
+	}
+
+	p.numRecordsProcessed++
+	if err := p.w.Write(row); err != nil {
+		return err
+	}
+
+	if (p.numRecordsProcessed % p.batchSizeNumRecords) == 0 {
+		if err := p.Flush(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *Preserver) Flush(ctx context.Context) error {
+	// Stop the current writer, it will be re-initialized
+	if err := p.w.WriteStop(); err != nil {
+		return err
+	}
+
+	// Copy the buffer, so other writers can continue concurrently
+	part := &bytes.Buffer{}
+	if _, err := io.Copy(part, p.buf); err != nil {
+		return err
+	}
+
+	// Reinitialize the writer for the next batch
+	if err := p.initWriter(); err != nil {
+		return err
+	}
+
+	if part.Len() == 0 {
+		return nil
+	}
+
+	return p.flush(ctx, part)
 }
 
 func WithRepository(repository internal.Repository) Option {
@@ -102,11 +132,11 @@ func WithSchema(schema []Field) Option {
 
 func WithBatchSizeNumRecords(batchSizeNumRecords int) Option {
 	return func(p *Preserver) {
-		// p.BatchSizeNumRecords = batchSizeNumRecords
+		p.batchSizeNumRecords = batchSizeNumRecords
 	}
 }
 
-func New(opts ...Option) *Preserver {
+func New(opts ...Option) (*Preserver, error) {
 	p := &Preserver{
 		logger: zap.NewNop(),
 	}
@@ -114,10 +144,14 @@ func New(opts ...Option) *Preserver {
 		opt(p)
 	}
 
+	if err := p.initWriter(); err != nil {
+		return nil, err
+	}
+
 	p.logger.Debug(
 		"parquet preserver initialized",
 		zap.Any("schema", p.Schema),
 		zap.Any("go-parquet", p.Schema.ToGoParquetSchema()),
 	)
-	return p
+	return p, nil
 }

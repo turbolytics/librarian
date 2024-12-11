@@ -20,11 +20,11 @@ archiver:
 
   preserver:
     type: parquet
-    batch_size: 1000
-    schema:
-      - name: account 
-        type: BYTE_ARRAY
-        converted_type: UTF8
-      - name: signup_time
-        type: INT64
-        converted_type: TIMESTAMP_MICROS
+    parquet:
+      schema:
+        - name: account
+          type: BYTE_ARRAY
+          converted_type: UTF8
+        - name: signup_time
+          type: INT64
+          converted_type: TIMESTAMP_MICROS
