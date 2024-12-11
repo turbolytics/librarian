@@ -39,11 +39,11 @@ func New(basePath string, opts ...Option) *Repository {
 	return r
 }
 
-func (r *Repository) Write(ctx context.Context, path string, reader io.Reader) error {
+func (r *Repository) Write(ctx context.Context, key string, reader io.Reader) error {
 	fullPath := filepath.Join(
 		r.basePath,
 		r.prefix,
-		path,
+		key,
 	)
 	r.logger.Info("writing file", zap.String("path", fullPath))
 
