@@ -79,7 +79,7 @@ func (p *Preserver) Preserve(ctx context.Context, record *internal.Record) error
 		return err
 	}
 
-	if (p.numRecordsProcessed % p.batchSizeNumRecords) == 0 {
+	if p.batchSizeNumRecords > 0 && ((p.numRecordsProcessed % p.batchSizeNumRecords) == 0) {
 		if err := p.Flush(ctx); err != nil {
 			return err
 		}
