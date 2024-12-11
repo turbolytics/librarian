@@ -69,16 +69,20 @@ func newInvokeCommand() *cobra.Command {
 				return fmt.Errorf("unknown repository type: %s", c.Archiver.Repository.Type)
 			}
 
-			preserver := parquet.New(
+			preserver, err := parquet.New(
 				parquet.WithLogger(l),
 				parquet.WithSchema(
 					config.ParquetFields(
-						c.Archiver.Preserver.Schema,
+						c.Archiver.Preserver.Parquet.Schema,
 					),
 				),
 				parquet.WithRepository(repository),
-				// parquet.WithBatchSizeNumRecords(c.Archiver.Preserver.BatchSizeNumRecords),
+				parquet.WithBatchSizeNumRecords(c.Archiver.Preserver.BatchSizeNumRecords),
 			)
+
+			if err != nil {
+				return err
+			}
 
 			/*
 				s3 := s3.New(

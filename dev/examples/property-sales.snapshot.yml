@@ -38,71 +38,73 @@ archiver:
 
   preserver:
     type: parquet
-    schema:
-      - name: serial_number
-        type: INT64
+    batch_size_num_records: 100000000
+    parquet:
+      schema:
+        - name: serial_number
+          type: INT64
 
-      - name: list_year
-        type: INT64
+        - name: list_year
+          type: INT64
 
-      - name: date_recorded
-        type: INT32
-        converted_type: DATE
-        repetition_type: OPTIONAL
+        - name: date_recorded
+          type: INT32
+          converted_type: DATE
+          repetition_type: OPTIONAL
 
-      - name: town
-        type: BYTE_ARRAY
-        converted_type: UTF8
+        - name: town
+          type: BYTE_ARRAY
+          converted_type: UTF8
 
-      - name: address
-        type: BYTE_ARRAY
-        converted_type: UTF8
-        repetition_type: OPTIONAL
+        - name: address
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
 
-      - name: assessed_value
-        type: INT64
-        converted_type: DECIMAL
-        precision: 12
-        scale: 2
+        - name: assessed_value
+          type: INT64
+          converted_type: DECIMAL
+          precision: 12
+          scale: 2
 
-      - name: sale_amount
-        type: INT64
-        converted_type: DECIMAL
-        precision: 12
-        scale: 3
+        - name: sale_amount
+          type: INT64
+          converted_type: DECIMAL
+          precision: 12
+          scale: 3
 
-      - name: sales_ratio
-        type: INT64
-        converted_type: DECIMAL
-        precision: 10
-        scale: 5
+        - name: sales_ratio
+          type: INT64
+          converted_type: DECIMAL
+          precision: 10
+          scale: 5
 
-      - name: property_type
-        type: BYTE_ARRAY
-        converted_type: UTF8
-        repetition_type: OPTIONAL
+        - name: property_type
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
 
-      - name: residential_type
-        type: BYTE_ARRAY
-        converted_type: UTF8
-        repetition_type: OPTIONAL
+        - name: residential_type
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
 
-      - name: non_use_code
-        type: BYTE_ARRAY
-        converted_type: UTF8
-        repetition_type: OPTIONAL
+        - name: non_use_code
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
 
-      - name: assessor_remarks
-        type: BYTE_ARRAY
-        converted_type: UTF8
-        repetition_type: OPTIONAL
+        - name: assessor_remarks
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
 
-      - name: opm_remarks
-        type: BYTE_ARRAY
-        converted_type: UTF8
-        repetition_type: OPTIONAL
+        - name: opm_remarks
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
 
-      - name: location
-        type: BYTE_ARRAY
-        converted_type: UTF8
-        repetition_type: OPTIONAL
+        - name: location
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
