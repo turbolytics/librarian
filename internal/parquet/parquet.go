@@ -14,13 +14,9 @@ type Option func(*Preserver)
 
 /*
 Preservation is the active process of saving things.
-
 The preserver knows about buffering batch sizes and partitions.
-
 The preserver may support different encryption or compression requirements.
-
 Preservers may have a durable buffer, or an ephemeral buffer. It's up to the preserver to manage its buffer.
-
 Preservers blindly call into a repository as many or as little times as they need with concurrency or not.
 */
 
