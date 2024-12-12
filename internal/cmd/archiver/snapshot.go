@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"github.com/turbolytics/librarian/internal/s3"
+	"path"
 
 	"github.com/turbolytics/librarian/internal"
 	"github.com/turbolytics/librarian/internal/archiver"
@@ -64,6 +66,20 @@ func newInvokeCommand() *cobra.Command {
 					c.Archiver.Repository.LocalConfig.Path,
 					local.WithPrefix(sid.String()),
 					local.WithLogger(l),
+				)
+			case "s3":
+				repository = s3.New(
+					s3.WithLogger(l),
+					s3.WithRegion(c.Archiver.Repository.S3Config.Region),
+					s3.WithBucket(c.Archiver.Repository.S3Config.Bucket),
+					s3.WithEndpoint(c.Archiver.Repository.S3Config.Endpoint),
+					s3.WithPrefix(
+						path.Join(
+							c.Archiver.Repository.S3Config.Prefix,
+							sid.String(),
+						),
+					),
+					s3.WithForcePathStyle(c.Archiver.Repository.S3Config.ForcePathStyle),
 				)
 			default:
 				return fmt.Errorf("unknown repository type: %s", c.Archiver.Repository.Type)
