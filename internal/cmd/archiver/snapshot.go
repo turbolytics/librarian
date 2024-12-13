@@ -100,17 +100,6 @@ func newInvokeCommand() *cobra.Command {
 				return err
 			}
 
-			/*
-				s3 := s3.New(
-					s3.WithLogger(l),
-					s3.WithRegion(c.Archiver.Repository.Region),
-					s3.WithBucket(c.Archiver.Repository.Bucket),
-					s3.WithPrefix(c.Archiver.Repository.Prefix),
-					s3.WithEndpoint(c.Archiver.Repository.Endpoint),
-					s3.WithForcePathStyle(c.Archiver.Repository.ForcePathStyle),
-				)
-			*/
-
 			a := archiver.New(
 				archiver.WithLogger(l),
 				archiver.WithSource(source),
