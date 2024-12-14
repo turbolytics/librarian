@@ -20,7 +20,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func newInvokeCommand() *cobra.Command {
+func newSnapshotCommand() *cobra.Command {
 	var configPath string
 
 	cmd := &cobra.Command{

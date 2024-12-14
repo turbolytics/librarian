@@ -3,6 +3,7 @@ package parquet
 import (
 	"fmt"
 	"github.com/turbolytics/librarian/internal"
+	"github.com/xitongsys/parquet-go/types"
 	"strconv"
 	"strings"
 	"time"
@@ -75,7 +76,10 @@ func dbValueToParquetValue(v any, field Field) (any, error) {
 	switch field.ConvertedType {
 	case "DATE":
 		if v != nil {
-			return int32(v.(time.Time).Unix()), nil
+			t := v.(time.Time)
+			epoch := time.Unix(0, 0)
+			duration := t.Sub(epoch)
+			return int32(duration.Hours() / 24), nil
 		}
 	case "DECIMAL":
 		switch typedv := v.(type) {
@@ -87,8 +91,14 @@ func dbValueToParquetValue(v any, field Field) (any, error) {
 			}
 			return i, nil
 		}
+	case "TIME_MILLIS":
+		return types.TimeToTIME_MILLIS(v.(time.Time), false), nil
+	case "TIME_MICROS":
+		return types.TimeToTIME_MICROS(v.(time.Time), false), nil
+	case "TIMESTAMP_MILLIS":
+		return types.TimeToTIMESTAMP_MILLIS(v.(time.Time), false), nil
 	case "TIMESTAMP_MICROS":
-		return v.(time.Time).UnixMicro(), nil
+		return types.TimeToTIMESTAMP_MICROS(v.(time.Time), false), nil
 	default:
 		return v, nil
 	}

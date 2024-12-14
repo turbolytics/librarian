@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/turbolytics/librarian/internal/cmd/schema"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -20,6 +21,7 @@ func NewRootCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(archiver.NewCommand())
+	cmd.AddCommand(schema.NewCommand())
 
 	return cmd
 }

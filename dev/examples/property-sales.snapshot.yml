@@ -34,68 +34,62 @@ archiver:
       schema:
         - name: serial_number
           type: INT64
-
+          repetition_type: OPTIONAL
         - name: list_year
           type: INT64
-
+          repetition_type: OPTIONAL
         - name: date_recorded
           type: INT32
           converted_type: DATE
           repetition_type: OPTIONAL
-
         - name: town
           type: BYTE_ARRAY
           converted_type: UTF8
-
+          repetition_type: OPTIONAL
         - name: address
           type: BYTE_ARRAY
           converted_type: UTF8
           repetition_type: OPTIONAL
-
         - name: assessed_value
           type: INT64
           converted_type: DECIMAL
-          precision: 12
+          repetition_type: OPTIONAL
           scale: 2
-
+          length: 12
         - name: sale_amount
           type: INT64
           converted_type: DECIMAL
-          precision: 12
-          scale: 3
-
+          repetition_type: OPTIONAL
+          scale: 2
+          length: 12
         - name: sales_ratio
           type: INT64
           converted_type: DECIMAL
-          precision: 10
-          scale: 5
-
+          repetition_type: OPTIONAL
+          scale: 2
+          length: 10
         - name: property_type
           type: BYTE_ARRAY
           converted_type: UTF8
           repetition_type: OPTIONAL
-
         - name: residential_type
           type: BYTE_ARRAY
           converted_type: UTF8
           repetition_type: OPTIONAL
-
         - name: non_use_code
           type: BYTE_ARRAY
           converted_type: UTF8
           repetition_type: OPTIONAL
-
         - name: assessor_remarks
           type: BYTE_ARRAY
           converted_type: UTF8
           repetition_type: OPTIONAL
-
         - name: opm_remarks
           type: BYTE_ARRAY
           converted_type: UTF8
           repetition_type: OPTIONAL
-
         - name: location
           type: BYTE_ARRAY
           converted_type: UTF8
           repetition_type: OPTIONAL
+
