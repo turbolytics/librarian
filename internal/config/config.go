@@ -47,8 +47,8 @@ type Repository struct {
 type Field struct {
 	Name           string `yaml:"name"`
 	Type           string `yaml:"type"`
-	ConvertedType  string `yaml:"converted_type"`
-	RepetitionType string `yaml:"repetition_type"`
+	ConvertedType  string `yaml:"converted_type,omitempty"`
+	RepetitionType string `yaml:"repetition_type,omitempty"`
 	Scale          *int   `yaml:"scale,omitempty"`
 	Precision      *int   `yaml:"precision,omitempty"`
 	Length         *int   `yaml:"length,omitempty"`

@@ -7,25 +7,18 @@ import (
 	"strconv"
 )
 
-/*
-select column_name, data_type, character_maximum_length, column_default, is_nullable
-from INFORMATION_SCHEMA.COLUMNS where table_name =
-*/
-
-type Column struct {
-	Name                   string
-	DataType               string
-	CharacterMaximumLength *int
-	ColumnDefault          *string
-	IsNullable             string
-}
-
 func PostgresSQLParserColumnToField(column *sqlparser.ColumnDefinition) (Field, error) {
 	f := Field{
 		Name: column.Name.String(),
 	}
 
 	switch column.Type.SQLType() {
+	case sqltypes.Int32:
+		// The go SQL types will return an int64 in the case of an INTEGER
+		// The purpose of this parser is to generate correct and seamless
+		// parquet schemas from the SQL schema.
+		// Encoding an INT32 as and INT64 will ensure that the parquet schema works
+		f.Type = "INT64"
 	case sqltypes.Int64:
 		f.Type = "INT64"
 	case sqltypes.VarChar:
