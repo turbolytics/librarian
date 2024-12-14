@@ -30,6 +30,17 @@ Think of Librarian as Kafka Connect CDC source for modern data world.
 - [ ] Debezium Messages Format Compatibility
 
 
+## Data Snapshots
+
+Snapshots capture the state of data at a specific point in time. They are simple to create and maintain because each snapshot is an isolated copy. This reduces complexity compared to incremental or differential backups.
+
+Snapshots are operationally forgiving. If a snapshot fails or becomes corrupted, previous snapshots remain intact. Each snapshot is independent, allowing easy recovery without affecting other snapshots. This independence simplifies debugging and rollback processes.
+
+By using snapshots, you ensure data durability and maintain a reliable history of changes.
+
+Librarian supports data snapshots for Postgres tables and archiving the snapshot using Parquet, either locally or remotely in s3. 
+
+
 # Quickstart 
 
 The easiest way to get started with librarian is to clone this repo. 
