@@ -20,9 +20,9 @@ Think of Librarian as Kafka Connect CDC source for modern data world.
 # Features and Roadmap.
 - [x] Postgres Snapshot
 - [x] Parquet Serialization
-- [ ] Parquet Automatic Schema Detection
-- [ ] S3 Persistence
-- [ ] Data Observability - Latency & Completeness
+- [x] Parquet Schema Generation from sql CREATE Statement
+- [x] S3 Persistence
+- [x] Data Observability - Snapshot Completeness
 - [ ] Mongo Snapshot
 - [ ] Postgres CDC
 - [ ] Mongo CDC
@@ -35,6 +35,9 @@ Think of Librarian as Kafka Connect CDC source for modern data world.
 The easiest way to get started with librarian is to clone this repo. 
 
 ## Tutorial: Generate a Postgres Parquet Snapshot Locally
+
+This tutorial will perform a local snapshot using a sample postgres dataset. The end result 
+will be a valid local parquet file that contains a snapshot of the postgres table.
 
 - Start Postgres Locally
 ```
