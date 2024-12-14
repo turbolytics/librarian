@@ -66,7 +66,7 @@ cat data/property_sales/7900e2f0-b75a-11ef-8e40-9e78fe1d02fa/catalog.json| jq .
   "source": "public.property_sales",
   "num_source_records": 1097629,
   "num_records_processed": 1097629,
-  "completed": true
+  "success": true
 }
 ```
 
