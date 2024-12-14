@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"go.uber.org/zap"
 	"io"
@@ -11,11 +12,11 @@ import (
 )
 
 type Source struct {
-	DB     *sql.DB
 	Schema string
 	Table  string
 	Query  string
 
+	db     *sql.DB
 	logger *zap.Logger
 }
 
@@ -23,33 +24,79 @@ func (s *Source) Name() string {
 	return fmt.Sprintf("%s.%s", s.Schema, s.Table)
 }
 
-// Count returns the expected count of records in the snapshot
-// TODO this should be executed in the same transaction that the
-// actual snapshot is executed in for correctness.
-func (s *Source) Count(ctx context.Context) (int, error) {
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM (%s)`, s.Query)
-	row := s.DB.QueryRowContext(ctx, query)
-	var c int
-	err := row.Scan(&c)
-	return c, err
-}
-
 func (s *Source) Close(ctx context.Context) error {
-	return s.DB.Close()
+	return s.db.Close()
 }
 
 type Snapshot struct {
+	logger  *zap.Logger
 	rows    *sql.Rows
 	columns []string
 	query   string
+
+	tx *sql.Tx
+}
+
+// Count returns the expected count of records in the snapshot
+// TODO this should be executed in the same transaction that the
+// actual snapshot is executed in for correctness.
+func (s *Snapshot) Count(ctx context.Context) (int, error) {
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM (%s);`, s.query)
+	row := s.tx.QueryRowContext(ctx, query)
+	var c int
+	err := row.Scan(&c)
+	return c, err
 }
 
 func (s *Snapshot) Query() string {
 	return s.query
 }
 
+// Init begins the snapshot process. At this point the only valid
+// subsequent calls are Next() until the snapshot is closed.
+func (s *Snapshot) Init(ctx context.Context) error {
+	s.logger.Info("taking snapshot", zap.String("query", s.query))
+	rows, err := s.tx.QueryContext(ctx, s.query)
+	if err != nil {
+		return err
+	}
+
+	cts, err := rows.ColumnTypes()
+	if err != nil {
+		return err
+	}
+	columnTypes := make([]string, len(cts))
+	dbTypes := make([]string, len(cts))
+	for _, ct := range cts {
+		columnTypes = append(columnTypes, ct.ScanType().Name())
+		dbTypes = append(dbTypes, ct.DatabaseTypeName())
+	}
+
+	fields, err := rows.Columns()
+	if err != nil {
+		return err
+	}
+
+	columns := make([]string, len(fields))
+	for i, name := range fields {
+		columns[i] = string(name)
+	}
+
+	s.rows = rows
+	s.columns = columns
+	return nil
+}
+
 func (s *Snapshot) Close() error {
-	return s.rows.Close()
+	var wErr error
+	if err := s.rows.Close(); err != nil {
+		wErr = errors.Join(wErr, err)
+	}
+	if err := s.tx.Commit(); err != nil {
+		wErr = errors.Join(wErr, err)
+	}
+
+	return wErr
 }
 
 func (s *Snapshot) Next() (*internal.Record, error) {
@@ -75,37 +122,15 @@ func (s *Snapshot) Next() (*internal.Record, error) {
 }
 
 func (s *Source) Snapshot(ctx context.Context) (*Snapshot, error) {
-	s.logger.Info("taking snapshot", zap.String("query", s.Query))
-	rows, err := s.DB.QueryContext(ctx, s.Query)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
-	}
-
-	cts, err := rows.ColumnTypes()
-	if err != nil {
-		return nil, err
-	}
-	columnTypes := make([]string, len(cts))
-	dbTypes := make([]string, len(cts))
-	for _, ct := range cts {
-		columnTypes = append(columnTypes, ct.ScanType().Name())
-		dbTypes = append(dbTypes, ct.DatabaseTypeName())
-	}
-
-	fields, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-
-	columns := make([]string, len(fields))
-	for i, name := range fields {
-		columns[i] = string(name)
 	}
 
 	return &Snapshot{
-		rows:    rows,
-		columns: columns,
-		query:   s.Query,
+		logger: s.logger,
+		query:  s.Query,
+		tx:     tx,
 	}, nil
 }
 
@@ -137,7 +162,7 @@ func WithQuery(query string) SourceOption {
 
 func NewSource(db *sql.DB, opts ...SourceOption) *Source {
 	s := Source{
-		DB: db,
+		db: db,
 	}
 
 	for _, opt := range opts {

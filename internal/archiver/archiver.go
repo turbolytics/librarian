@@ -61,12 +61,18 @@ func (a *Archiver) Snapshot(ctx context.Context, id uuid.UUID) error {
 		Source:    a.source.Name(),
 	}
 
-	expectedRows, err := a.source.Count(ctx)
+	// 1. Collect data from source
+	snapshot, err := a.source.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	defer snapshot.Close()
+
+	expectedRows, err := snapshot.Count(ctx)
 
 	if err != nil {
 		return err
 	}
-
 	clog.NumSourceRecords = expectedRows
 
 	a.logger.Info(
@@ -75,12 +81,9 @@ func (a *Archiver) Snapshot(ctx context.Context, id uuid.UUID) error {
 		zap.Int("expected_rows", expectedRows),
 	)
 
-	// 1. Collect data from source
-	snapshot, err := a.source.Snapshot(ctx)
-	if err != nil {
+	if err := snapshot.Init(ctx); err != nil {
 		return err
 	}
-	defer snapshot.Close()
 
 	// 2. Preserve data to repository
 	for {
