@@ -92,12 +92,6 @@ func (s *Source) Snapshot(ctx context.Context) (*Snapshot, error) {
 		dbTypes = append(dbTypes, ct.DatabaseTypeName())
 	}
 
-	s.logger.Debug(
-		"snapshot row types",
-		zap.Any("column_types", columnTypes),
-		zap.Any("db_types", dbTypes),
-	)
-
 	fields, err := rows.Columns()
 	if err != nil {
 		return nil, err

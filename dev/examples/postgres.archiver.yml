@@ -27,4 +27,4 @@ archiver:
           converted_type: UTF8
         - name: signup_time
           type: INT64
-          converted_type: TIMESTAMP_MICROS
+          converted_type: TIMESTAMP_MILLIS
