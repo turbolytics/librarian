@@ -112,7 +112,7 @@ func (a *Archiver) Snapshot(ctx context.Context, id uuid.UUID) error {
 
 	// 4. Update and flush catalog
 	clog.NumRecordsProcessed = a.preserver.NumRecordsProcessed()
-	clog.Completed = true
+	clog.Success = true
 	clog.EndTime = time.Now().UTC()
 	a.logger.Info("catalog", zap.Any("catalog", clog))
 

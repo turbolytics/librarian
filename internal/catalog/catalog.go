@@ -19,5 +19,5 @@ type Catalog struct {
 	Source              string    `json:"source"`
 	NumSourceRecords    int       `json:"num_source_records"`
 	NumRecordsProcessed int       `json:"num_records_processed"`
-	Completed           bool      `json:"completed"`
+	Success             bool      `json:"success"`
 }
