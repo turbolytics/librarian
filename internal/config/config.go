@@ -49,9 +49,9 @@ type Field struct {
 	Type           string `yaml:"type"`
 	ConvertedType  string `yaml:"converted_type"`
 	RepetitionType string `yaml:"repetition_type"`
-	Scale          *int   `yaml:"scale"`
-	Precision      *int   `yaml:"precision"`
-	Length         *int   `yaml:"length"`
+	Scale          *int   `yaml:"scale,omitempty"`
+	Precision      *int   `yaml:"precision,omitempty"`
+	Length         *int   `yaml:"length,omitempty"`
 }
 
 type Preserver struct {
@@ -105,4 +105,23 @@ func ParquetFields(fields []Field) []parquet.Field {
 	}
 
 	return parquetFields
+}
+
+func SchemaToConfigFields(schema parquet.Schema) []Field {
+	fields := make([]Field, len(schema))
+	for i, f := range schema {
+		field := Field{
+			Name:           f.Name,
+			Type:           f.Type,
+			ConvertedType:  f.ConvertedType,
+			RepetitionType: f.RepetitionType,
+			Scale:          f.Scale,
+			Precision:      f.Precision,
+			Length:         f.Length,
+		}
+
+		fields[i] = field
+	}
+
+	return fields
 }

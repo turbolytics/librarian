@@ -10,14 +10,6 @@ archiver:
     local:
       path: ./data/users
 
-    # type: s3
-    # s3:
-    #   region: us-east-1
-    #   bucket: librarian-test
-    #   endpoint: 's3.localhost.localstack.cloud:4566'
-    #   prefix: users
-    #   force_path_style: true
-
   preserver:
     type: parquet
     parquet:
@@ -25,6 +17,9 @@ archiver:
         - name: account
           type: BYTE_ARRAY
           converted_type: UTF8
+          repetition_type: OPTIONAL
+
         - name: signup_time
           type: INT64
           converted_type: TIMESTAMP_MILLIS
+          repetition_type: OPTIONAL
