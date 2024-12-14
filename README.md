@@ -40,6 +40,14 @@ By using snapshots, you ensure data durability and maintain a reliable history o
 
 Librarian supports data snapshots for Postgres tables and archiving the snapshot using Parquet, either locally or remotely in s3. 
 
+The following image describes Librarian snapshots:
+
+<img width="843" alt="Screenshot 2024-12-14 at 5 27 18 PM" src="https://github.com/user-attachments/assets/06d5b502-7bd1-4575-b127-4c85091e9fe2" />
+
+1. Librarian Issues a `SELECT` query to postgres.
+2. Librarian "preserves" (serializes/encodes) data to parquet.
+3. Librarian saves the snapshotted data to local disk or s3.
+
 
 # Quickstart 
 
