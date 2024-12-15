@@ -1,0 +1,109 @@
+archiver:
+  name: consumer-complaints-example
+  source:
+    connection_string: "postgresql://test:test@localhost:5432/test?sslmode=disable"
+    schema: public
+    table: consumer_complaints
+    query: |
+      SELECT 
+        date_received,
+        product,
+        sub_product,
+        issue,
+        sub_issue,
+        consumer_complaint_narrative,
+        company_public_response,
+        company,
+        state,
+        zip_code,
+        tags,
+        consumer_consent_provided,
+        submitted_via,
+        date_sent_to_company,
+        company_response_to_consumer,
+        timely_response,
+        consumer_disputed,
+        complaint_id
+      FROM consumer_complaints
+
+  repository:
+    type: local
+    local:
+      path: ./data/property_sales
+
+  preserver:
+    type: parquet
+    parquet:
+      schema:
+        - name: date_received
+          type: INT32
+          converted_type: DATE
+          repetition_type: OPTIONAL
+        - name: product
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: sub_product
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: issue
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: sub_issue
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: consumer_complaint_narrative
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: company_public_response
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: company
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: state
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: zip_code
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: tags
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: consumer_consent_provided
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: submitted_via
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: date_sent_to_company
+          type: INT32
+          converted_type: DATE
+          repetition_type: OPTIONAL
+        - name: company_response_to_consumer
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: timely_response
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: consumer_disputed
+          type: BYTE_ARRAY
+          converted_type: UTF8
+          repetition_type: OPTIONAL
+        - name: complaint_id
+          type: INT64
+          repetition_type: OPTIONAL
+
