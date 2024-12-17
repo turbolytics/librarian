@@ -29,7 +29,7 @@ archiver:
   repository:
     type: local
     local:
-      path: ./data/property_sales
+      path: ./data/consumer_complaints
 
   preserver:
     type: parquet

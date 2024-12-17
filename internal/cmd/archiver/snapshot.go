@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/turbolytics/librarian/internal/s3"
+	"go.uber.org/zap"
 	"path"
 
 	"github.com/turbolytics/librarian/internal"
@@ -16,8 +17,6 @@ import (
 	lsql "github.com/turbolytics/librarian/internal/sql"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
-
-	"go.uber.org/zap"
 )
 
 func newSnapshotCommand() *cobra.Command {
@@ -39,6 +38,8 @@ func newSnapshotCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			l.Debug("config loaded", zap.Any("config", c))
 
 			db, err := sql.Open("pgx", c.Archiver.Source.ConnectionString)
 			if err != nil {
@@ -110,6 +111,7 @@ func newSnapshotCommand() *cobra.Command {
 			defer a.Close(ctx)
 
 			if err := a.Snapshot(ctx, sid); err != nil {
+				l.Error("snapshot failed", zap.Error(err))
 				return err
 			}
 
