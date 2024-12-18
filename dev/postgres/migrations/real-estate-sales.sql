@@ -15,23 +15,3 @@ CREATE TABLE property_sales
     opm_remarks      VARCHAR(255),
     location         VARCHAR(255)
 );
-
-COPY property_sales(
-    serial_number,
-    list_year,
-    date_recorded,
-    town,
-    address,
-    assessed_value,
-    sale_amount,
-    sales_ratio,
-    property_type,
-    residential_type,
-    non_use_code,
-    assessor_remarks,
-    opm_remarks,
-    location
-)
-FROM '/tmp/data/Real_Estate_Sales_2001-2022_GL.csv'
-DELIMITER ','
-CSV HEADER;
