@@ -24,6 +24,9 @@ func PostgresSQLParserColumnToField(column *sqlparser.ColumnDefinition) (Field, 
 	case sqltypes.VarChar:
 		f.Type = "BYTE_ARRAY"
 		f.ConvertedType = "UTF8"
+	case sqltypes.Text:
+		f.Type = "BYTE_ARRAY"
+		f.ConvertedType = "UTF8"
 	case sqltypes.Timestamp:
 		f.Type = "INT64"
 		f.ConvertedType = "TIMESTAMP_MILLIS"
