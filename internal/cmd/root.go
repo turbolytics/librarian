@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/turbolytics/librarian/internal/cmd/fixtures"
 	"github.com/turbolytics/librarian/internal/cmd/schema"
 	"os"
 
@@ -22,6 +23,7 @@ func NewRootCommand() *cobra.Command {
 
 	cmd.AddCommand(archiver.NewCommand())
 	cmd.AddCommand(schema.NewCommand())
+	cmd.AddCommand(fixtures.NewCommand())
 
 	return cmd
 }
