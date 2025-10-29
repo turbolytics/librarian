@@ -1,3 +1,7 @@
+.PHONY: fmt
+fmt:
+	go fmt ./...
+
 test-unit:
 	go test -short ./...
 
