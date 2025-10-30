@@ -2,10 +2,11 @@ package local
 
 import (
 	"context"
-	"go.uber.org/zap"
 	"io"
 	"os"
 	"path/filepath"
+
+	"go.uber.org/zap"
 )
 
 type Option func(*Repository)
@@ -60,4 +61,9 @@ func (r *Repository) Write(ctx context.Context, key string, reader io.Reader) er
 
 	_, err = io.Copy(file, reader)
 	return err
+}
+
+func (r *Repository) Flush() error {
+	// No-op for local repository
+	return nil
 }

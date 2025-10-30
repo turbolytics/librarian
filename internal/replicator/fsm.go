@@ -1,14 +1,22 @@
 package replicator
 
-import "fmt"
+import (
+	"fmt"
+
+	"go.uber.org/zap"
+)
+
+var (
+	ErrInvalidTransition = fmt.Errorf("invalid state transition")
+)
 
 type State string
 
 const (
-	StateCreated      State = "created"
-	StateInitializing State = "initializing"
+	StateCreated State = "created"
+	// StateInitializing State = "initializing"
 	StateConnecting   State = "connecting"
-	StateReady        State = "ready"
+	StateStreaming    State = "streaming"
 	StatePaused       State = "paused"
 	StateStopped      State = "stopped"
 	StateReconnecting State = "reconnecting"
@@ -17,23 +25,70 @@ const (
 )
 
 type FSM struct {
-	current     State
 	Transitions map[State]map[State]struct{}
+
+	current State
+	logger  *zap.Logger
 }
 
-func NewFSM(initial State) *FSM {
-	return &FSM{
-		current: initial,
+type FSMOption func(*FSM)
+
+func FSMWithLogger(logger *zap.Logger) FSMOption {
+	return func(f *FSM) {
+		f.logger = logger
+	}
+}
+
+func FSMWithInitialState(state State) FSMOption {
+	return func(f *FSM) {
+		f.current = state
+	}
+}
+
+func NewFSM(opts ...FSMOption) *FSM {
+	f := &FSM{
+		current: StateCreated,
+		logger:  zap.NewNop(),
+
 		Transitions: map[State]map[State]struct{}{
 			StateCreated: {
-				StateInitializing: {},
-			},
-			StateInitializing: {
 				StateConnecting: {},
-				StateError:      {},
+				StateStopped:    {}, // Can stop before starting
+			},
+			StateConnecting: {
+				StateStreaming: {},
+				StateError:     {},
+				StateStopped:   {}, // Can stop during connection
+			},
+			StateStreaming: {
+				StatePaused:       {},
+				StateStopped:      {}, // Graceful stop
+				StateReconnecting: {},
+				StateError:        {},
+			},
+			StatePaused: {
+				StateStreaming: {}, // Resume
+				StateStopped:   {}, // Stop while paused
+				StateError:     {},
+			},
+			StateReconnecting: {
+				StateStreaming: {},
+				StateError:     {},
+				StateStopped:   {}, // Give up reconnecting
+			},
+			StateError: {
+				StateConnecting: {}, // Retry connection
+				StateStopped:    {}, // Give up and stop
+			},
+			StateStopped: {
+				StateConnecting: {}, // Restart
 			},
 		},
 	}
+	for _, opt := range opts {
+		opt(f)
+	}
+	return f
 }
 
 func (f *FSM) Current() State {
@@ -49,8 +104,19 @@ func (f *FSM) CanTransition(to State) bool {
 
 func (f *FSM) Transition(to State) error {
 	if !f.CanTransition(to) {
-		return fmt.Errorf("invalid transition from %s to %s", f.current, to)
+		f.logger.Error("Invalid state transition",
+			zap.String("current", string(f.current)),
+			zap.String("from", string(f.current)),
+			zap.String("to", string(to)),
+		)
+		return ErrInvalidTransition
 	}
+	previous := f.current
 	f.current = to
+
+	f.logger.Info("State transitioned",
+		zap.String("state", string(f.current)),
+		zap.String("from", string(previous)),
+	)
 	return nil
 }

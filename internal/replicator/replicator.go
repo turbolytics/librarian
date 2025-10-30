@@ -35,7 +35,9 @@ func WithLogger(logger *zap.Logger) ReplicatorOption {
 
 func New(opts ...ReplicatorOption) (*Replicator, error) {
 	r := &Replicator{
-		State: NewFSM(StateCreated),
+		State: NewFSM(
+			FSMWithInitialState(StateCreated),
+		),
 
 		logger: zap.NewNop(),
 	}
@@ -55,5 +57,30 @@ func New(opts ...ReplicatorOption) (*Replicator, error) {
 */
 
 // Start a replicator
+func (r *Replicator) Start() error {
+	if err := r.State.Transition(StateConnecting); err != nil {
+		return err
+	}
 
-// HTTP Replicator
+	r.logger.Info("Starting replicator", zap.String("state", string(r.State.Current())))
+
+	// Connect to source
+	if err := r.Source.Connect(); err != nil {
+		r.State.Transition(StateError)
+		return err
+	}
+
+	if err := r.State.Transition(StateStreaming); err != nil {
+		return err
+	}
+
+	r.logger.Info("Replicator started", zap.String("state", string(r.State.Current())))
+	return nil
+}
+
+// StartServer starts the HTTP command server
+func (r *Replicator) StartServer(addr string) error {
+	// Initialize HTTP server with routes for monitoring/control
+	// This is separate from the replication logic
+	return nil
+}
