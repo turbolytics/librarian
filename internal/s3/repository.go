@@ -3,12 +3,13 @@ package s3
 import (
 	"bufio"
 	"context"
+	"io"
+	"path/filepath"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"go.uber.org/zap"
-	"io"
-	"path/filepath"
 )
 
 type Option func(*Repository)
@@ -111,4 +112,9 @@ func (r *Repository) Write(ctx context.Context, key string, reader io.Reader) er
 		Body: bufio.NewReader(reader),
 	})
 	return err
+}
+
+func (r *Repository) Flush() error {
+	// No-op for S3
+	return nil
 }
