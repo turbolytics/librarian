@@ -12,6 +12,18 @@ services:
       - ./postgres/migrations:/docker-entrypoint-initdb.d
       - ./data:/tmp/data
 
+  mongodb:
+    image: mongodb/mongodb-community-server:8.0-ubi8
+    ports:
+      - "27017:27017"
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--noauth"]
+    healthcheck:
+      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}) }" | mongosh --port 27017 --quiet
+      interval: 5s
+      timeout: 30s
+      start_period: 0s
+      retries: 30
+
   localstack:
     container_name: "${LOCALSTACK_DOCKER_NAME:-localstack-main}"
     image: localstack/localstack

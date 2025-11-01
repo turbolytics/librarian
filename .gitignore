@@ -1,6 +1,5 @@
 dev/volume
 dev/data/local
-
 data/
-
 dist/
+bin/

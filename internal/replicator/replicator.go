@@ -1,11 +1,26 @@
 package replicator
 
-import "go.uber.org/zap"
+import (
+	"context"
+
+	"go.uber.org/zap"
+)
+
+type Event struct {
+	ID      string
+	Time    int64
+	Payload interface{}
+}
+
+func (e Event) IsZero() bool {
+	return e.ID == "" && e.Time == 0 && e.Payload == nil
+}
 
 type Source interface {
 	Connect() error
 	Disconnect() error
-	// Stream() (<-chan Event, error)
+	Next(ctx context.Context) (Event, error)
+	// Close()
 	// GetSchema() (Schema, error)
 	// GetCheckpoint() (Checkpoint, error)
 	// SetCheckpoint(Checkpoint) error
@@ -56,8 +71,8 @@ func New(opts ...ReplicatorOption) (*Replicator, error) {
 - Ephemeral - As part of librarian process
 */
 
-// Start a replicator
-func (r *Replicator) Start() error {
+// Run the replicator
+func (r *Replicator) Run(ctx context.Context) error {
 	if err := r.State.Transition(StateConnecting); err != nil {
 		return err
 	}
@@ -72,6 +87,16 @@ func (r *Replicator) Start() error {
 
 	if err := r.State.Transition(StateStreaming); err != nil {
 		return err
+	}
+	// begin consuming the stream
+	for {
+		event, err := r.Source.Next(ctx)
+		if err != nil {
+			r.State.Transition(StateError)
+			return err
+		}
+		// Process the event (e.g., transform and send to target)
+		r.logger.Info("Received event", zap.String("event_id", event.ID))
 	}
 
 	r.logger.Info("Replicator started", zap.String("state", string(r.State.Current())))
