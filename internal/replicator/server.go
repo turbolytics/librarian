@@ -65,9 +65,44 @@ func (s *Server) Routes() chi.Router {
 		r.Get("/", s.listReplicators)
 		r.Get("/{id}", s.getReplicator)
 		// r.Delete("/{id}", s.deleteReplicator)
+
+		// Control endpoints
+		r.Post("/{id}/pause", s.signalHandler(SignalPause))
+		r.Post("/{id}/resume", s.signalHandler(SignalResume))
+		r.Post("/{id}/restart", s.signalHandler(SignalRestart))
+		r.Post("/{id}/stop", s.signalHandler(SignalStop))
 	})
 
 	return r
+}
+
+// signalHandler returns a handler function for the given signal
+func (s *Server) signalHandler(signal Signal) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+
+		s.mu.RLock()
+		rep, exists := s.replicators[id]
+		s.mu.RUnlock()
+
+		if !exists {
+			http.Error(w, "replicator not found", http.StatusNotFound)
+			return
+		}
+
+		rep.SendSignal(signal)
+
+		s.logger.Info("signal sent to replicator",
+			zap.String("replicator_id", id),
+			zap.String("signal", string(signal)))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":        string(signal) + " signal sent",
+			"replicator_id": id,
+		})
+	}
 }
 
 func (s *Server) listReplicators(w http.ResponseWriter, r *http.Request) {
@@ -111,31 +146,6 @@ func (s *Server) getReplicator(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(info)
 }
-
-/*
-func (s *Server) deleteReplicator(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-
-	s.mu.Lock()
-	rep, exists := s.replicators[id]
-	if exists {
-		// Stop the replicator before removing
-		if rep.State.Current() != StateStopped {
-			rep.State.Transition(StateStopped)
-		}
-		delete(s.replicators, id)
-	}
-	s.mu.Unlock()
-
-	if !exists {
-		http.Error(w, "replicator not found", http.StatusNotFound)
-		return
-	}
-
-	s.logger.Info("replicator deleted via API", zap.String("replicator_id", id))
-	w.WriteHeader(http.StatusNoContent)
-}
-*/
 
 func (s *Server) Start(ctx context.Context, addr string) error {
 	srv := &http.Server{

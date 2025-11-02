@@ -8,6 +8,15 @@ import (
 	"go.uber.org/zap"
 )
 
+type Signal string
+
+const (
+	SignalPause   Signal = "pause"
+	SignalResume  Signal = "resume"
+	SignalStop    Signal = "stop"
+	SignalRestart Signal = "restart"
+)
+
 var (
 	// ErrNoEventsFound is returned when no events are found in the source
 	ErrNoEventsFound = errors.New("no events found")
@@ -43,8 +52,11 @@ type Replicator struct {
 	State         *FSM
 	Stats         Stats
 
-	ID     string
-	logger *zap.Logger
+	ID string
+
+	// Control channel for receiving signals
+	controlChan chan Signal
+	logger      *zap.Logger
 }
 
 type ReplicatorOption func(*Replicator)
@@ -72,7 +84,8 @@ func New(opts ...ReplicatorOption) (*Replicator, error) {
 		SourceOptions: SourceOptions{
 			EmptyPollInterval: 5 * time.Second,
 		},
-		logger: zap.NewNop(),
+		logger:      zap.NewNop(),
+		controlChan: make(chan Signal, 1), // Buffered to prevent blocking
 	}
 
 	for _, opt := range opts {
@@ -115,26 +128,116 @@ func (r *Replicator) Run(ctx context.Context) error {
 
 	r.logger.Info("Replicator started", zap.String("state", string(r.State.Current())))
 
-	// begin consuming the stream
-	// consume from status channel as well, which will send signals to pause, stop, or handle errors
 	for {
-		event, err := r.Source.Next(ctx)
-		// check if error is ErrNoEventsFound, if so sleep and continue
-		if err == ErrNoEventsFound {
-			time.Sleep(r.SourceOptions.EmptyPollInterval)
-			continue
+		select {
+		case <-ctx.Done():
+			r.logger.Info("Context cancelled, stopping replicator")
+			r.State.Transition(StateStopped)
+			return r.Source.Disconnect()
+
+		case signal := <-r.controlChan:
+			if err := r.handleSignal(signal); err != nil {
+				r.logger.Error("Error handling signal",
+					zap.String("signal", string(signal)),
+					zap.Error(err))
+				return err
+			}
+
+			// If stopped, exit the loop
+			if r.State.Current() == StateStopped {
+				return nil
+			}
+
+			// If paused, wait for resume or other signals
+			if r.State.Current() == StatePaused {
+				continue
+			}
+
+		default:
+			// Only process events if we're in streaming state
+			if r.State.Current() != StateStreaming {
+				time.Sleep(100 * time.Millisecond) // Brief pause
+				continue
+			}
+
+			// Process next event with timeout to allow signal checking
+			event, err := r.Source.Next(ctx)
+
+			if err == ErrNoEventsFound {
+				time.Sleep(r.SourceOptions.EmptyPollInterval)
+				continue
+			}
+
+			if err != nil {
+				r.State.Transition(StateError)
+				return err
+			}
+
+			// Update stats
+			r.Stats.Source.TotalEvents++
+			r.Stats.Source.LastEventReceivedAt = time.Now()
+
+			// Process the event
+			r.logger.Info("Received event", zap.String("event_id", event.ID))
+		}
+	}
+}
+
+// SendSignal sends a control signal to the replicator
+func (r *Replicator) SendSignal(signal Signal) {
+	select {
+	case r.controlChan <- signal:
+		r.logger.Info("Signal sent", zap.String("signal", string(signal)))
+	default:
+		r.logger.Warn("Control channel full, signal dropped", zap.String("signal", string(signal)))
+	}
+}
+
+func (r *Replicator) handleSignal(signal Signal) error {
+	currentState := r.State.Current()
+
+	switch signal {
+	case SignalPause:
+		if currentState == StateStreaming {
+			r.logger.Info("Pausing replicator")
+			return r.State.Transition(StatePaused)
+		}
+		r.logger.Warn("Cannot pause from current state", zap.String("state", string(currentState)))
+
+	case SignalResume:
+		if currentState == StatePaused {
+			r.logger.Info("Resuming replicator")
+			return r.State.Transition(StateStreaming)
+		}
+		r.logger.Warn("Cannot resume from current state", zap.String("state", string(currentState)))
+
+	case SignalStop:
+		r.logger.Info("Stopping replicator")
+		r.State.Transition(StateStopped)
+		return r.Source.Disconnect()
+
+	case SignalRestart:
+		r.logger.Info("Restarting replicator")
+
+		// Disconnect and reconnect
+		if err := r.Source.Disconnect(); err != nil {
+			r.logger.Error("Error disconnecting during restart", zap.Error(err))
 		}
 
-		if err != nil {
+		if err := r.State.Transition(StateConnecting); err != nil {
+			return err
+		}
+
+		if err := r.Source.Connect(); err != nil {
 			r.State.Transition(StateError)
 			return err
 		}
 
-		// Update stats
-		r.Stats.Source.TotalEvents++
-		r.Stats.Source.LastEventReceivedAt = time.Now()
+		return r.State.Transition(StateStreaming)
 
-		// Process the event (e.g., transform and send to target)
-		r.logger.Info("Received event", zap.String("event_id", event.ID))
+	default:
+		r.logger.Warn("Unknown signal received", zap.String("signal", string(signal)))
 	}
+
+	return nil
 }
