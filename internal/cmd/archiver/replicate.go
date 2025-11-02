@@ -12,6 +12,7 @@ import (
 
 func newReplicateCommand() *cobra.Command {
 	var sourceURL string
+	var replicatorID string
 
 	var cmd = &cobra.Command{
 		Use:   "replicate",
@@ -20,6 +21,7 @@ func newReplicateCommand() *cobra.Command {
 			logger, _ := zap.NewDevelopment()
 			defer logger.Sync()
 			l := logger.Named("librarian.replicator")
+
 			l.Info("starting replicator!")
 
 			l.Info("replicating data...")
@@ -44,19 +46,35 @@ func newReplicateCommand() *cobra.Command {
 			r, err := replicator.New(
 				replicator.WithSource(source),
 				replicator.WithLogger(l),
+				replicator.WithID(replicatorID),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create replicator: %w", err)
 			}
 
-			if err := r.Run(cmd.Context()); err != nil {
-				return fmt.Errorf("replicator failed to start: %w", err)
-			}
+			go func() {
+				if err := r.Run(cmd.Context()); err != nil {
+					l.Error("replicator error", zap.Error(err))
+				}
+			}()
+
+			s := replicator.NewServer(l)
+			s.RegisterReplicator(r)
+
+			go func() {
+				if err := s.Start(cmd.Context(), ":8080"); err != nil {
+					l.Error("replicator server error", zap.Error(err))
+				}
+			}()
+
+			<-cmd.Context().Done()
+
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVarP(&sourceURL, "source", "s", "", "Source URL for replication (e.g., mongodb://user:pass@host/db)")
-	cmd.MarkFlagRequired("source")
+	cmd.Flags().StringVarP(&replicatorID, "id", "i", "", "ID of the replicator instance")
+	cmd.MarkFlagsRequiredTogether("source", "id")
 	return cmd
 }

@@ -2,6 +2,7 @@ package replicator
 
 import (
 	"fmt"
+	"sync"
 
 	"go.uber.org/zap"
 )
@@ -25,6 +26,7 @@ const (
 )
 
 type FSM struct {
+	mu          sync.Mutex
 	Transitions map[State]map[State]struct{}
 
 	current State
@@ -92,10 +94,12 @@ func NewFSM(opts ...FSMOption) *FSM {
 }
 
 func (f *FSM) Current() State {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.current
 }
 
-func (f *FSM) CanTransition(to State) bool {
+func (f *FSM) canTransition(to State) bool {
 	if _, ok := f.Transitions[f.current][to]; ok {
 		return true
 	}
@@ -103,7 +107,10 @@ func (f *FSM) CanTransition(to State) bool {
 }
 
 func (f *FSM) Transition(to State) error {
-	if !f.CanTransition(to) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if !f.canTransition(to) {
 		f.logger.Error("Invalid state transition",
 			zap.String("current", string(f.current)),
 			zap.String("from", string(f.current)),

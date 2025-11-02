@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/turbolytics/librarian/internal/replicator"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -47,7 +48,9 @@ func (s *Source) Connect() error {
 		return err
 	}
 
-	opts := options.ChangeStream()
+	opts := options.ChangeStream().
+		SetMaxAwaitTime(5 * time.Second)
+
 	// SetFullDocument(options.UpdateLookup) // Include full document for updates
 	coll := s.client.Database(s.database).Collection(s.collection)
 
@@ -81,15 +84,14 @@ func (s *Source) Close() error {
 
 // Example of processing change events
 func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
-	defer s.changeStream.Close(ctx)
-
 	if ok := s.changeStream.Next(ctx); !ok {
 		if err := s.changeStream.Err(); err != nil {
 			s.logger.Error("Change stream error", zap.Error(err))
 			return replicator.Event{}, err
 		}
+
 		s.logger.Info("No more change events")
-		return replicator.Event{}, nil
+		return replicator.Event{}, replicator.ErrNoEventsFound
 	}
 
 	var changeEvent bson.M
@@ -101,11 +103,11 @@ func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
 	s.logger.Info("Change event received",
 		zap.String("operation", changeEvent["operationType"].(string)),
 		zap.Any("document_key", changeEvent["documentKey"]),
+		zap.Any("event", changeEvent),
 	)
 
 	return replicator.Event{
-		ID:      changeEvent["_id"].(string),
-		Time:    changeEvent["clusterTime"].(int64),
+		ID:      uuid.New().String(),
 		Payload: changeEvent,
 	}, nil
 }

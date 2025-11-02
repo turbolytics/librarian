@@ -2,18 +2,28 @@ package replicator
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"go.uber.org/zap"
 )
 
-type Event struct {
-	ID      string
-	Time    int64
-	Payload interface{}
-}
+var (
+	// ErrNoEventsFound is returned when no events are found in the source
+	ErrNoEventsFound = errors.New("no events found")
+)
 
-func (e Event) IsZero() bool {
-	return e.ID == "" && e.Time == 0 && e.Payload == nil
+type SourceOptions struct {
+	// interval to poll the source when no events are found
+	// source.empty.poll_interval
+	EmptyPollInterval time.Duration
+	/*
+	   - source.mongodb.batch_size
+	   - source.mongodb.starting_position
+	   - source.mongodb.resume_token
+	   - source.mongodb.max_await_time
+	   - source.mongodb.full_document
+	*/
 }
 
 type Source interface {
@@ -28,13 +38,22 @@ type Source interface {
 }
 
 type Replicator struct {
-	Source Source
-	State  *FSM
+	Source        Source
+	SourceOptions SourceOptions
+	State         *FSM
+	Stats         Stats
 
+	ID     string
 	logger *zap.Logger
 }
 
 type ReplicatorOption func(*Replicator)
+
+func WithID(id string) ReplicatorOption {
+	return func(r *Replicator) {
+		r.ID = id
+	}
+}
 
 func WithSource(source Source) ReplicatorOption {
 	return func(r *Replicator) {
@@ -50,15 +69,20 @@ func WithLogger(logger *zap.Logger) ReplicatorOption {
 
 func New(opts ...ReplicatorOption) (*Replicator, error) {
 	r := &Replicator{
-		State: NewFSM(
-			FSMWithInitialState(StateCreated),
-		),
-
+		SourceOptions: SourceOptions{
+			EmptyPollInterval: 5 * time.Second,
+		},
 		logger: zap.NewNop(),
 	}
+
 	for _, opt := range opts {
 		opt(r)
 	}
+
+	r.State = NewFSM(
+		FSMWithInitialState(StateCreated),
+		FSMWithLogger(r.logger.Named("fsm")),
+	)
 
 	r.logger.Info("Replicator created", zap.String("state", string(r.State.Current())))
 	return r, nil
@@ -88,24 +112,29 @@ func (r *Replicator) Run(ctx context.Context) error {
 	if err := r.State.Transition(StateStreaming); err != nil {
 		return err
 	}
+
+	r.logger.Info("Replicator started", zap.String("state", string(r.State.Current())))
+
 	// begin consuming the stream
+	// consume from status channel as well, which will send signals to pause, stop, or handle errors
 	for {
 		event, err := r.Source.Next(ctx)
+		// check if error is ErrNoEventsFound, if so sleep and continue
+		if err == ErrNoEventsFound {
+			time.Sleep(r.SourceOptions.EmptyPollInterval)
+			continue
+		}
+
 		if err != nil {
 			r.State.Transition(StateError)
 			return err
 		}
+
+		// Update stats
+		r.Stats.Source.TotalEvents++
+		r.Stats.Source.LastEventReceivedAt = time.Now()
+
 		// Process the event (e.g., transform and send to target)
 		r.logger.Info("Received event", zap.String("event_id", event.ID))
 	}
-
-	r.logger.Info("Replicator started", zap.String("state", string(r.State.Current())))
-	return nil
-}
-
-// StartServer starts the HTTP command server
-func (r *Replicator) StartServer(addr string) error {
-	// Initialize HTTP server with routes for monitoring/control
-	// This is separate from the replication logic
-	return nil
 }
