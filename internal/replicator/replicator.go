@@ -3,6 +3,7 @@ package replicator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.uber.org/zap"
@@ -24,6 +25,9 @@ var (
 
 type SourceOptions struct {
 	// interval to poll the source when no events are found
+	// source.checkpoint.batch_size
+	CheckpointBatchSize int
+
 	// source.empty.poll_interval
 	EmptyPollInterval time.Duration
 	/*
@@ -36,7 +40,7 @@ type SourceOptions struct {
 }
 
 type Source interface {
-	Connect() error
+	Connect(*Checkpoint) error
 	Disconnect() error
 	Next(ctx context.Context) (Event, error)
 	// Close()
@@ -47,6 +51,7 @@ type Source interface {
 }
 
 type Replicator struct {
+	Checkpointer  Checkpointer
 	Source        Source
 	SourceOptions SourceOptions
 	State         *FSM
@@ -55,11 +60,24 @@ type Replicator struct {
 	ID string
 
 	// Control channel for receiving signals
-	controlChan chan Signal
-	logger      *zap.Logger
+	controlChan    chan Signal
+	lastCheckpoint *Checkpoint
+	logger         *zap.Logger
 }
 
 type ReplicatorOption func(*Replicator)
+
+func WithCheckpointer(checkpointer Checkpointer) ReplicatorOption {
+	return func(r *Replicator) {
+		r.Checkpointer = checkpointer
+	}
+}
+
+func WithSourceOptions(sourceOptions SourceOptions) ReplicatorOption {
+	return func(r *Replicator) {
+		r.SourceOptions = sourceOptions
+	}
+}
 
 func WithID(id string) ReplicatorOption {
 	return func(r *Replicator) {
@@ -81,6 +99,7 @@ func WithLogger(logger *zap.Logger) ReplicatorOption {
 
 func New(opts ...ReplicatorOption) (*Replicator, error) {
 	r := &Replicator{
+		Checkpointer: &NoopCheckpointer{},
 		SourceOptions: SourceOptions{
 			EmptyPollInterval: 5 * time.Second,
 		},
@@ -91,6 +110,8 @@ func New(opts ...ReplicatorOption) (*Replicator, error) {
 	for _, opt := range opts {
 		opt(r)
 	}
+
+	fmt.Println("Replicator Opts:", r.SourceOptions)
 
 	r.State = NewFSM(
 		FSMWithInitialState(StateCreated),
@@ -116,8 +137,27 @@ func (r *Replicator) Run(ctx context.Context) error {
 
 	r.logger.Info("Starting replicator", zap.String("state", string(r.State.Current())))
 
+	// load the checkpoint from the Checkpointer
+	var checkpoint *Checkpoint
+	var err error
+	checkpoint, err = r.Checkpointer.Load(ctx, r.ID)
+	if err != nil {
+		r.State.Transition(StateError)
+		return err
+	}
+
+	if checkpoint != nil {
+		r.logger.Info("Loaded checkpoint",
+			zap.String("replicator_id", r.ID),
+			zap.String("position", fmt.Sprintf("%v", checkpoint.Position)),
+			zap.Time("timestamp", checkpoint.Timestamp))
+	} else {
+		r.logger.Info("No checkpoint found, starting fresh",
+			zap.String("replicator_id", r.ID))
+	}
+
 	// Connect to source
-	if err := r.Source.Connect(); err != nil {
+	if err := r.Source.Connect(checkpoint); err != nil {
 		r.State.Transition(StateError)
 		return err
 	}
@@ -170,6 +210,11 @@ func (r *Replicator) Run(ctx context.Context) error {
 
 			if err != nil {
 				r.State.Transition(StateError)
+				return err
+			}
+
+			if err := r.checkpoint(ctx, event); err != nil {
+				r.logger.Error("Error checkpointing", zap.Error(err))
 				return err
 			}
 
@@ -228,7 +273,7 @@ func (r *Replicator) handleSignal(signal Signal) error {
 			return err
 		}
 
-		if err := r.Source.Connect(); err != nil {
+		if err := r.Source.Connect(r.lastCheckpoint); err != nil {
 			r.State.Transition(StateError)
 			return err
 		}
@@ -238,6 +283,31 @@ func (r *Replicator) handleSignal(signal Signal) error {
 	default:
 		r.logger.Warn("Unknown signal received", zap.String("signal", string(signal)))
 	}
+
+	return nil
+}
+
+func (r *Replicator) checkpoint(ctx context.Context, latestEvent Event) error {
+	if r.Checkpointer == nil || r.SourceOptions.CheckpointBatchSize == 0 {
+		return nil
+	}
+
+	checkpoint := &Checkpoint{
+		ReplicatorID: r.ID,
+		Position:     latestEvent.Position,
+		Timestamp:    time.Now(),
+	}
+
+	if err := r.Checkpointer.Save(ctx, checkpoint); err != nil {
+		return err
+	}
+
+	r.lastCheckpoint = checkpoint
+
+	r.logger.Info("Checkpoint saved",
+		zap.String("replicator_id", r.ID),
+		zap.String("position", fmt.Sprintf("%v", checkpoint.Position)),
+		zap.Time("timestamp", checkpoint.Timestamp))
 
 	return nil
 }

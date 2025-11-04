@@ -1,14 +1,16 @@
 package replicator
 
 type Event struct {
-	ID   string
-	Time int64
+	ID   string `json:"id,omitempty"`
+	Time int64  `json:"time,omitempty"`
 
 	// Envelope for top level fields
 	// Operation: Type
 	// Operation: Time
 	// Primary Keys? Event Target ID?
-	Payload interface{}
+	Payload interface{} `json:"payload,omitempty"`
+
+	Position []byte `json:"position,omitempty"`
 }
 
 func (e Event) IsZero() bool {

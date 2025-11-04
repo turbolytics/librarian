@@ -3,3 +3,5 @@ dev/data/local
 data/
 dist/
 bin/
+dev/checkpoints/*
+!dev/checkpoints/.gitkeep

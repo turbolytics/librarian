@@ -3,6 +3,7 @@ package archiver
 import (
 	"fmt"
 	"net/url"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/turbolytics/librarian/internal/integrations/mongo"
@@ -13,6 +14,11 @@ import (
 func newReplicateCommand() *cobra.Command {
 	var sourceURL string
 	var replicatorID string
+
+	sourceOpts := replicator.SourceOptions{
+		CheckpointBatchSize: 1,
+		EmptyPollInterval:   5 * time.Second,
+	}
 
 	var cmd = &cobra.Command{
 		Use:   "replicate",
@@ -43,10 +49,14 @@ func newReplicateCommand() *cobra.Command {
 				return fmt.Errorf("unsupported source protocol: %s", u.Scheme)
 			}
 
+			checkpointer := replicator.NewFilesystemCheckpointer("./dev/checkpoints", l)
+
 			r, err := replicator.New(
 				replicator.WithSource(source),
 				replicator.WithLogger(l),
 				replicator.WithID(replicatorID),
+				replicator.WithCheckpointer(checkpointer),
+				replicator.WithSourceOptions(sourceOpts),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create replicator: %w", err)
@@ -73,6 +83,7 @@ func newReplicateCommand() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().IntVar(&sourceOpts.CheckpointBatchSize, "source-checkpoint-batch-size", 1, "Batch size for checkpointing")
 	cmd.Flags().StringVarP(&sourceURL, "source", "s", "", "Source URL for replication (e.g., mongodb://user:pass@host/db)")
 	cmd.Flags().StringVarP(&replicatorID, "id", "i", "", "ID of the replicator instance")
 	cmd.MarkFlagsRequiredTogether("source", "id")

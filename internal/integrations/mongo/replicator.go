@@ -40,7 +40,7 @@ func NewSource(ctx context.Context, uri *url.URL, logger *zap.Logger) (*Source, 
 	}, nil
 }
 
-func (s *Source) Connect() error {
+func (s *Source) Connect(checkpoint *replicator.Checkpoint) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -50,6 +50,23 @@ func (s *Source) Connect() error {
 
 	opts := options.ChangeStream().
 		SetMaxAwaitTime(5 * time.Second)
+
+	if checkpoint != nil {
+		// Decode base64 string back to bson.Raw
+		/*
+			resumeTokenBytes, err := base64.StdEncoding.DecodeString(string(checkpoint.Position))
+			if err != nil {
+				s.logger.Error("Failed to decode resume token from checkpoint", zap.Error(err))
+				return err
+			}
+		*/
+
+		opts.SetResumeAfter(bson.Raw(checkpoint.Position))
+		s.logger.Info("Resuming from checkpoint",
+			zap.String("database", s.database),
+			zap.String("collection", s.collection),
+			zap.Any("resume_token", checkpoint.Position))
+	}
 
 	// SetFullDocument(options.UpdateLookup) // Include full document for updates
 	coll := s.client.Database(s.database).Collection(s.collection)
@@ -107,7 +124,9 @@ func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
 	)
 
 	return replicator.Event{
-		ID:      uuid.New().String(),
-		Payload: changeEvent,
+		ID:       uuid.New().String(),
+		Time:     time.Now().Unix(),
+		Payload:  changeEvent,
+		Position: s.changeStream.ResumeToken(),
 	}, nil
 }
