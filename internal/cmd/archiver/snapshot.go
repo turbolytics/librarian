@@ -3,16 +3,17 @@ package archiver
 import (
 	"database/sql"
 	"fmt"
+	"path"
+
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/turbolytics/librarian/internal/s3"
 	"go.uber.org/zap"
-	"path"
 
 	"github.com/turbolytics/librarian/internal"
 	"github.com/turbolytics/librarian/internal/archiver"
 	"github.com/turbolytics/librarian/internal/config"
-	"github.com/turbolytics/librarian/internal/local"
+	"github.com/turbolytics/librarian/internal/integrations/local"
 	"github.com/turbolytics/librarian/internal/parquet"
 	lsql "github.com/turbolytics/librarian/internal/sql"
 

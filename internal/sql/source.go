@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/turbolytics/librarian/internal"
 	"go.uber.org/zap"
-	"io"
 )
 
 type Source struct {

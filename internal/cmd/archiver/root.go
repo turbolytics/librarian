@@ -17,5 +17,6 @@ func NewCommand() *cobra.Command {
 	}
 	cmd.AddCommand(newStartCommand())
 	cmd.AddCommand(newSnapshotCommand())
+	cmd.AddCommand(newReplicateCommand())
 	return cmd
 }
