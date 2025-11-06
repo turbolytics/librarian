@@ -3,13 +3,29 @@ package replicator
 import "time"
 
 type SourceStats struct {
-	TotalEvents         int64     `json:"total_events"`
-	LastEventReceivedAt time.Time `json:"last_event_received_at,omitempty"`
+	TotalEvents       int64     `json:"total_events"`
+	TotalBytes        int64     `json:"total_bytes"`
+	LastEventAt       time.Time `json:"last_event_at"`
+	LastConnectAt     time.Time `json:"last_connect_at"`
+	ConnectionHealthy bool      `json:"connection_healthy"`
+	ConnectionRetries int64     `json:"connection_retries"`
+	EventErrorCount   int64     `json:"event_error_count"`
+	LastError         string    `json:"last_error,omitempty"`
 
-	// Number of successfully processed events
-	// FailedEvents        int64
+	// Source-specific metrics
+	SourceSpecific map[string]interface{} `json:"source_specific,omitempty"`
+}
+
+type ReplicatorStats struct {
+	StartedAt        time.Time `json:"started_at"`
+	UptimeSeconds    int64     `json:"uptime_seconds"`
+	State            State     `json:"state"`
+	CheckpointCount  int64     `json:"checkpoint_count"`
+	LastCheckpointAt time.Time `json:"last_checkpoint_at"`
+	SignalsReceived  int64     `json:"signals_received"`
 }
 
 type Stats struct {
-	Source SourceStats `json:"source,omitempty"`
+	Source     SourceStats     `json:"source,omitempty"`
+	Replicator ReplicatorStats `json:"replicator"`
 }
