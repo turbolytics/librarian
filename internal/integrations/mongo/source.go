@@ -195,7 +195,7 @@ func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
 	}, nil
 }
 
-func (s *Source) GetStats() replicator.SourceStats {
+func (s *Source) Stats() replicator.SourceStats {
 	s.statsMu.RLock()
 	defer s.statsMu.RUnlock()
 

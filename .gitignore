@@ -5,3 +5,4 @@ dist/
 bin/
 dev/checkpoints/*
 !dev/checkpoints/.gitkeep
+.DS_Store

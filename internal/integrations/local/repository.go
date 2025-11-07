@@ -40,6 +40,10 @@ func New(basePath string, opts ...Option) *Repository {
 	return r
 }
 
+func (r *Repository) Close(ctx context.Context) error {
+	return nil
+}
+
 func (r *Repository) Write(ctx context.Context, key string, reader io.Reader) error {
 	fullPath := filepath.Join(
 		r.basePath,

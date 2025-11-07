@@ -16,6 +16,20 @@ type SourceStats struct {
 	SourceSpecific map[string]interface{} `json:"source_specific,omitempty"`
 }
 
+type TargetStats struct {
+	TotalEvents       int64     `json:"total_events"`
+	TotalBytes        int64     `json:"total_bytes"`
+	LastEventAt       time.Time `json:"last_event_at"`
+	LastConnectAt     time.Time `json:"last_connect_at"`
+	ConnectionHealthy bool      `json:"connection_healthy"`
+	ConnectionRetries int64     `json:"connection_retries"`
+	EventErrorCount   int64     `json:"event_error_count"`
+	LastError         string    `json:"last_error,omitempty"`
+
+	// Target-specific metrics
+	TargetSpecific map[string]interface{} `json:"target_specific,omitempty"`
+}
+
 type ReplicatorStats struct {
 	StartedAt        time.Time `json:"started_at"`
 	UptimeSeconds    int64     `json:"uptime_seconds"`
@@ -27,5 +41,6 @@ type ReplicatorStats struct {
 
 type Stats struct {
 	Source     SourceStats     `json:"source,omitempty"`
+	Target     TargetStats     `json:"target,omitempty"`
 	Replicator ReplicatorStats `json:"replicator"`
 }

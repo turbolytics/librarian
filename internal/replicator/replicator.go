@@ -23,6 +23,10 @@ var (
 	ErrNoEventsFound = errors.New("no events found")
 )
 
+type TargetOptions struct {
+	BatchSize int
+}
+
 type SourceOptions struct {
 	// interval to poll the source when no events are found
 	// source.checkpoint.batch_size
@@ -43,7 +47,7 @@ type Source interface {
 	Connect(*Checkpoint) error
 	Disconnect() error
 	Next(ctx context.Context) (Event, error)
-	GetStats() SourceStats
+	Stats() SourceStats
 }
 
 type Target interface {
@@ -57,7 +61,7 @@ type Replicator struct {
 	Source        Source
 	SourceOptions SourceOptions
 	State         *FSM
-	Stats         Stats
+	Target        Target
 
 	ID string
 
@@ -65,6 +69,7 @@ type Replicator struct {
 	controlChan    chan Signal
 	lastCheckpoint *Checkpoint
 	logger         *zap.Logger
+	stats          Stats
 }
 
 type ReplicatorOption func(*Replicator)
@@ -96,6 +101,12 @@ func WithSource(source Source) ReplicatorOption {
 func WithLogger(logger *zap.Logger) ReplicatorOption {
 	return func(r *Replicator) {
 		r.logger = logger
+	}
+}
+
+func WithTarget(target Target) ReplicatorOption {
+	return func(r *Replicator) {
+		r.Target = target
 	}
 }
 
@@ -140,8 +151,8 @@ func (r *Replicator) Run(ctx context.Context) error {
 	r.logger.Info("Starting replicator", zap.String("state", string(r.State.Current())))
 
 	// Initialize replicator stats
-	r.Stats.Replicator.StartedAt = time.Now()
-	r.Stats.Replicator.State = r.State.Current()
+	r.stats.Replicator.StartedAt = time.Now()
+	r.stats.Replicator.State = r.State.Current()
 
 	// load the checkpoint from the Checkpointer
 	var checkpoint *Checkpoint
@@ -174,6 +185,7 @@ func (r *Replicator) Run(ctx context.Context) error {
 
 	r.logger.Info("Replicator started", zap.String("state", string(r.State.Current())))
 
+	// TODO add flush ticker based on target options
 	for {
 		select {
 		case <-ctx.Done():
@@ -182,7 +194,7 @@ func (r *Replicator) Run(ctx context.Context) error {
 			return r.Source.Disconnect()
 
 		case signal := <-r.controlChan:
-			r.Stats.Replicator.SignalsReceived++
+			r.stats.Replicator.SignalsReceived++
 			if err := r.handleSignal(signal); err != nil {
 				r.logger.Error("Error handling signal",
 					zap.String("signal", string(signal)),
@@ -226,9 +238,9 @@ func (r *Replicator) Run(ctx context.Context) error {
 			}
 
 			// Update replicator stats (source stats are tracked in source itself)
-			r.Stats.Replicator.State = r.State.Current()
-			if !r.Stats.Replicator.StartedAt.IsZero() {
-				r.Stats.Replicator.UptimeSeconds = int64(time.Since(r.Stats.Replicator.StartedAt).Seconds())
+			r.stats.Replicator.State = r.State.Current()
+			if !r.stats.Replicator.StartedAt.IsZero() {
+				r.stats.Replicator.UptimeSeconds = int64(time.Since(r.stats.Replicator.StartedAt).Seconds())
 			}
 
 			// Process the event
@@ -314,8 +326,8 @@ func (r *Replicator) checkpoint(ctx context.Context, latestEvent Event) error {
 	r.lastCheckpoint = checkpoint
 
 	// Update checkpoint stats
-	r.Stats.Replicator.CheckpointCount++
-	r.Stats.Replicator.LastCheckpointAt = time.Now()
+	r.stats.Replicator.CheckpointCount++
+	r.stats.Replicator.LastCheckpointAt = time.Now()
 
 	r.logger.Info("Checkpoint saved",
 		zap.String("replicator_id", r.ID),
@@ -325,11 +337,11 @@ func (r *Replicator) checkpoint(ctx context.Context, latestEvent Event) error {
 	return nil
 }
 
-// GetStats returns comprehensive stats including source and replicator metrics
-func (r *Replicator) GetStats() Stats {
+// Stats returns comprehensive stats including source and replicator metrics
+func (r *Replicator) Stats() Stats {
 	stats := Stats{
-		Source:     r.Source.GetStats(),
-		Replicator: r.Stats.Replicator,
+		Source:     r.Source.Stats(),
+		Replicator: r.stats.Replicator,
 	}
 
 	// Update runtime stats
