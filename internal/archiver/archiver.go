@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/turbolytics/librarian/internal"
 	"github.com/turbolytics/librarian/internal/catalog"
-	"io"
-	"time"
 
 	"go.uber.org/zap"
 

@@ -24,7 +24,7 @@ var (
 )
 
 type TargetOptions struct {
-	BatchSize int
+	FlushTimeout time.Duration
 }
 
 type SourceOptions struct {
@@ -51,9 +51,12 @@ type Source interface {
 }
 
 type Target interface {
-	Close() error
+	Close(ctx context.Context) error
+	Connect(ctx context.Context) error
+	Disconnect(ctx context.Context) error
 	Write(ctx context.Context, event Event) error
 	Flush(ctx context.Context) error
+	Stats() TargetStats
 }
 
 type Replicator struct {
@@ -62,6 +65,7 @@ type Replicator struct {
 	SourceOptions SourceOptions
 	State         *FSM
 	Target        Target
+	TargetOptions TargetOptions
 
 	ID string
 
@@ -110,6 +114,12 @@ func WithTarget(target Target) ReplicatorOption {
 	}
 }
 
+func WithTargetOptions(targetOptions TargetOptions) ReplicatorOption {
+	return func(r *Replicator) {
+		r.TargetOptions = targetOptions
+	}
+}
+
 func New(opts ...ReplicatorOption) (*Replicator, error) {
 	r := &Replicator{
 		Checkpointer: &NoopCheckpointer{},
@@ -123,8 +133,6 @@ func New(opts ...ReplicatorOption) (*Replicator, error) {
 	for _, opt := range opts {
 		opt(r)
 	}
-
-	fmt.Println("Replicator Opts:", r.SourceOptions)
 
 	r.State = NewFSM(
 		FSMWithInitialState(StateCreated),
@@ -148,7 +156,11 @@ func (r *Replicator) Run(ctx context.Context) error {
 		return err
 	}
 
-	r.logger.Info("Starting replicator", zap.String("state", string(r.State.Current())))
+	r.logger.Info("Starting replicator",
+		zap.String("state", string(r.State.Current())),
+		zap.String("source-options", fmt.Sprintf("%+v", r.SourceOptions)),
+		zap.String("target-options", fmt.Sprintf("%+v", r.TargetOptions)),
+	)
 
 	// Initialize replicator stats
 	r.stats.Replicator.StartedAt = time.Now()
@@ -173,6 +185,12 @@ func (r *Replicator) Run(ctx context.Context) error {
 			zap.String("replicator_id", r.ID))
 	}
 
+	// connect to target
+	if err := r.Target.Connect(ctx); err != nil {
+		r.State.Transition(StateError)
+		return err
+	}
+
 	// Connect to source
 	if err := r.Source.Connect(checkpoint); err != nil {
 		r.State.Transition(StateError)
@@ -184,6 +202,12 @@ func (r *Replicator) Run(ctx context.Context) error {
 	}
 
 	r.logger.Info("Replicator started", zap.String("state", string(r.State.Current())))
+
+	var flushTicker *time.Ticker
+	if r.TargetOptions.FlushTimeout > 0 {
+		flushTicker = time.NewTicker(r.TargetOptions.FlushTimeout)
+		defer flushTicker.Stop()
+	}
 
 	// TODO add flush ticker based on target options
 	for {
@@ -211,7 +235,12 @@ func (r *Replicator) Run(ctx context.Context) error {
 			if r.State.Current() == StatePaused {
 				continue
 			}
-
+		case <-flushTicker.C:
+			r.logger.Debug("Flushing to target")
+			if err := r.Target.Flush(ctx); err != nil {
+				r.logger.Error("Error flushing to target", zap.Error(err))
+				return err
+			}
 		default:
 			// Only process events if we're in streaming state
 			if r.State.Current() != StateStreaming {
@@ -232,6 +261,13 @@ func (r *Replicator) Run(ctx context.Context) error {
 				return err
 			}
 
+			// Write event to target
+			if err := r.Target.Write(ctx, event); err != nil {
+				r.logger.Error("Error writing to target", zap.Error(err))
+				r.State.Transition(StateError)
+				return err
+			}
+
 			if err := r.checkpoint(ctx, event); err != nil {
 				r.logger.Error("Error checkpointing", zap.Error(err))
 				return err
@@ -242,9 +278,6 @@ func (r *Replicator) Run(ctx context.Context) error {
 			if !r.stats.Replicator.StartedAt.IsZero() {
 				r.stats.Replicator.UptimeSeconds = int64(time.Since(r.stats.Replicator.StartedAt).Seconds())
 			}
-
-			// Process the event
-			r.logger.Info("Received event", zap.String("event_id", event.ID))
 		}
 	}
 }
@@ -341,6 +374,7 @@ func (r *Replicator) checkpoint(ctx context.Context, latestEvent Event) error {
 func (r *Replicator) Stats() Stats {
 	stats := Stats{
 		Source:     r.Source.Stats(),
+		Target:     r.Target.Stats(),
 		Replicator: r.stats.Replicator,
 	}
 

@@ -25,6 +25,10 @@ type TargetStats struct {
 	ConnectionRetries int64     `json:"connection_retries"`
 	EventErrorCount   int64     `json:"event_error_count"`
 	LastError         string    `json:"last_error,omitempty"`
+	LastWriteAt       time.Time `json:"last_write_at"`
+	LastFlushAt       time.Time `json:"last_flush_at"`
+	PendingEvents     int       `json:"pending_events"`
+	WriteErrorCount   int       `json:"write_error_count"`
 
 	// Target-specific metrics
 	TargetSpecific map[string]interface{} `json:"target_specific,omitempty"`

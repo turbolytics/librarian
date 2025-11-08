@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/turbolytics/librarian/internal/integrations/kafka"
 	"github.com/turbolytics/librarian/internal/integrations/mongo"
 	"github.com/turbolytics/librarian/internal/replicator"
 	"go.uber.org/zap"
@@ -19,6 +20,10 @@ func newReplicateCommand() *cobra.Command {
 	sourceOpts := replicator.SourceOptions{
 		CheckpointBatchSize: 0,
 		EmptyPollInterval:   5 * time.Second,
+	}
+
+	targetOpts := replicator.TargetOptions{
+		FlushTimeout: 5 * time.Second,
 	}
 
 	var cmd = &cobra.Command{
@@ -63,6 +68,11 @@ func newReplicateCommand() *cobra.Command {
 			switch targetURLParsed.Scheme {
 			case "kafka":
 				l.Info("initializing kafka target", zap.String("url", targetURL))
+				target, err = kafka.NewRepository(
+					cmd.Context(),
+					targetURLParsed,
+					l,
+				)
 			default:
 				return fmt.Errorf("unsupported target protocol: %s", targetURLParsed.Scheme)
 			}
@@ -76,6 +86,7 @@ func newReplicateCommand() *cobra.Command {
 				replicator.WithSource(source),
 				replicator.WithSourceOptions(sourceOpts),
 				replicator.WithTarget(target),
+				replicator.WithTargetOptions(targetOpts),
 			)
 			if err != nil {
 				return fmt.Errorf("failed to create replicator: %w", err)
@@ -103,6 +114,7 @@ func newReplicateCommand() *cobra.Command {
 	}
 
 	cmd.Flags().IntVar(&sourceOpts.CheckpointBatchSize, "source-checkpoint-batch-size", 0, "Batch size for checkpointing. 0 disables checkpointing")
+	cmd.Flags().IntVar(&targetOpts.BatchSize, "target-batch-size", 0, "Batch size for target. 0 disables batching")
 	cmd.Flags().StringVarP(&sourceURL, "source", "s", "", "Source URL for replication (e.g., mongodb://user:pass@host/db)")
 	cmd.Flags().StringVarP(&targetURL, "target", "t", "", "Target URL for replication (e.g., mongodb://user:pass@host/db)")
 	cmd.Flags().StringVarP(&replicatorID, "id", "i", "", "ID of the replicator instance")
