@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +15,7 @@ import (
 )
 
 type Repository struct {
+	config   kafka.ConfigMap
 	producer *kafka.Producer
 	topic    string
 	logger   *zap.Logger
@@ -26,7 +26,6 @@ type Repository struct {
 
 	// Batching
 	eventBuffer []replicator.Event
-	batchSize   int
 }
 
 func NewRepository(ctx context.Context, uri *url.URL, logger *zap.Logger) (*Repository, error) {
@@ -46,47 +45,6 @@ func NewRepository(ctx context.Context, uri *url.URL, logger *zap.Logger) (*Repo
 	config := kafka.ConfigMap{
 		"bootstrap.servers": brokers,
 		"client.id":         "librarian-replicator",
-		"acks":              "all",
-	}
-
-	// Add query parameters to config
-	for key, values := range uri.Query() {
-		if len(values) > 0 {
-			config[key] = values[0]
-		}
-	}
-
-	batchSize := 1
-	if batchSizeStr := uri.Query().Get("batch.size"); batchSizeStr != "" {
-		if size, err := strconv.Atoi(batchSizeStr); err == nil {
-			batchSize = size
-		}
-	}
-
-	return &Repository{
-		topic:     topic,
-		logger:    logger,
-		batchSize: batchSize,
-		stats: replicator.TargetStats{
-			ConnectionHealthy: false,
-			TargetSpecific: map[string]interface{}{
-				"topic":      topic,
-				"brokers":    brokers,
-				"batch_size": batchSize,
-			},
-		},
-		eventBuffer: make([]replicator.Event, 0, batchSize),
-	}, nil
-}
-
-func (r *Repository) Connect(ctx context.Context) error {
-	r.statsMu.Lock()
-	defer r.statsMu.Unlock()
-
-	// Create producer config from stored values
-	config := kafka.ConfigMap{
-		"bootstrap.servers": r.stats.TargetSpecific["brokers"].(string),
-		"client.id":         "librarian-replicator",
 
 		// Performance optimizations for local development
 		"acks":                                  "1",      // Only wait for leader (faster than "all")
@@ -101,7 +59,34 @@ func (r *Repository) Connect(ctx context.Context) error {
 		"delivery.timeout.ms": "10000", // 10s instead of 120s default
 	}
 
-	producer, err := kafka.NewProducer(&config)
+	// Add query parameters to config
+	for key, values := range uri.Query() {
+		if len(values) > 0 {
+			config[key] = values[0]
+		}
+	}
+
+	return &Repository{
+		topic:  topic,
+		config: config,
+		logger: logger,
+		stats: replicator.TargetStats{
+			ConnectionHealthy: false,
+			TargetSpecific: map[string]interface{}{
+				"topic":   topic,
+				"brokers": brokers,
+			},
+		},
+	}, nil
+}
+
+func (r *Repository) Connect(ctx context.Context) error {
+	r.statsMu.Lock()
+	defer r.statsMu.Unlock()
+
+	// Create producer config from stored values
+
+	producer, err := kafka.NewProducer(&r.config)
 	if err != nil {
 		r.stats.ConnectionHealthy = false
 		r.stats.LastError = err.Error()
@@ -111,6 +96,27 @@ func (r *Repository) Connect(ctx context.Context) error {
 	r.producer = producer
 	r.stats.ConnectionHealthy = true
 	r.stats.LastError = ""
+
+	go func() {
+		defer r.logger.Info("Producer event loop closed")
+
+		for e := range producer.Events() {
+			switch ev := e.(type) {
+			case *kafka.Message:
+				if ev.TopicPartition.Error != nil {
+					r.logger.Error("Delivery failed", zap.Error(ev.TopicPartition.Error))
+					// Add your retry logic, DLQ, or alerting here
+				} else {
+					r.logger.Info("Message delivered",
+						zap.String("topic", *ev.TopicPartition.Topic),
+						zap.Int32("partition", ev.TopicPartition.Partition),
+						zap.Int64("offset", int64(ev.TopicPartition.Offset)))
+				}
+			case kafka.Error:
+				r.logger.Error("Producer error", zap.Error(ev))
+			}
+		}
+	}()
 
 	r.logger.Info("Kafka target connected",
 		zap.String("topic", r.topic),
@@ -134,21 +140,58 @@ func (r *Repository) Disconnect(ctx context.Context) error {
 }
 
 func (r *Repository) Write(ctx context.Context, event replicator.Event) error {
-	r.statsMu.Lock()
-	r.eventBuffer = append(r.eventBuffer, event)
-	bufferSize := len(r.eventBuffer)
-	r.stats.PendingEvents = bufferSize
-	r.statsMu.Unlock()
-
-	// Auto-flush if buffer is full
-	if bufferSize >= r.batchSize {
-		return r.Flush(ctx)
+	eventData, err := json.Marshal(event)
+	if err != nil {
+		r.statsMu.Lock()
+		r.stats.WriteErrorCount++
+		r.stats.LastError = err.Error()
+		r.statsMu.Unlock()
+		return err
 	}
+
+	message := &kafka.Message{
+		TopicPartition: kafka.TopicPartition{
+			Topic:     &r.topic,
+			Partition: kafka.PartitionAny,
+		},
+		Key:   []byte(event.ID),
+		Value: eventData,
+	}
+
+	if err := r.producer.Produce(message, nil); err != nil {
+		r.statsMu.Lock()
+		r.stats.WriteErrorCount++
+		r.stats.LastError = err.Error()
+		r.statsMu.Unlock()
+		return err
+	}
+
+	r.statsMu.Lock()
+	r.stats.TotalEvents += 1
+	r.stats.LastWriteAt = time.Now()
+	r.stats.LastError = ""
+	r.statsMu.Unlock()
 
 	return nil
 }
 
+// Flush is a noop since the kafka producer handles batching internally
 func (r *Repository) Flush(ctx context.Context) error {
+	/*
+		if n := r.producer.Flush(5000); n > 0 {
+			err := fmt.Errorf("failed to flush all messages to Kafka, %d remaining", n)
+			r.statsMu.Lock()
+			r.stats.WriteErrorCount++
+			r.stats.LastError = err.Error()
+			r.statsMu.Unlock()
+			return err
+		}
+	*/
+	return nil
+}
+
+/*
+
 	r.statsMu.Lock()
 	r.logger.Debug("Flushing events to Kafka", zap.Int("buffer_size", len(r.eventBuffer)))
 	eventsToFlush := make([]replicator.Event, len(r.eventBuffer))
@@ -194,12 +237,17 @@ func (r *Repository) Flush(ctx context.Context) error {
 	}
 
 	// Wait for all messages to be delivered
-	r.producer.Flush(5000) // 5 second timeout
+	if n := r.producer.Flush(1000); n > 0 {
+		err := fmt.Errorf("failed to flush all messages to Kafka, %d remaining", n)
+		r.statsMu.Lock()
+		r.stats.WriteErrorCount++
+		r.stats.LastError = err.Error()
+		r.statsMu.Unlock()
+		return err
+	}
 
 	// Update stats
 	r.statsMu.Lock()
-	r.stats.TotalEvents += int64(len(eventsToFlush))
-	r.stats.LastWriteAt = time.Now()
 	r.stats.LastFlushAt = time.Now()
 	r.stats.LastError = ""
 	r.statsMu.Unlock()
@@ -210,6 +258,7 @@ func (r *Repository) Flush(ctx context.Context) error {
 
 	return nil
 }
+*/
 
 func (r *Repository) Close(ctx context.Context) error {
 	return r.Disconnect(ctx)

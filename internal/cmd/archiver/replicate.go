@@ -114,7 +114,6 @@ func newReplicateCommand() *cobra.Command {
 	}
 
 	cmd.Flags().IntVar(&sourceOpts.CheckpointBatchSize, "source-checkpoint-batch-size", 0, "Batch size for checkpointing. 0 disables checkpointing")
-	cmd.Flags().IntVar(&targetOpts.BatchSize, "target-batch-size", 0, "Batch size for target. 0 disables batching")
 	cmd.Flags().StringVarP(&sourceURL, "source", "s", "", "Source URL for replication (e.g., mongodb://user:pass@host/db)")
 	cmd.Flags().StringVarP(&targetURL, "target", "t", "", "Target URL for replication (e.g., mongodb://user:pass@host/db)")
 	cmd.Flags().StringVarP(&replicatorID, "id", "i", "", "ID of the replicator instance")
