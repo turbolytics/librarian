@@ -3,11 +3,12 @@ package parquet
 import (
 	"bytes"
 	"context"
+	"io"
+
 	"github.com/google/uuid"
 	"github.com/turbolytics/librarian/internal"
 	"github.com/xitongsys/parquet-go/writer"
 	"go.uber.org/zap"
-	"io"
 )
 
 type Option func(*Preserver)

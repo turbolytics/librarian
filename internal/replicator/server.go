@@ -114,7 +114,7 @@ func (s *Server) listReplicators(w http.ResponseWriter, r *http.Request) {
 		replicators = append(replicators, ReplicatorInfo{
 			ID:    rep.ID,
 			State: rep.State.Current(),
-			Stats: rep.Stats,
+			Stats: rep.Stats(),
 		})
 	}
 
@@ -140,7 +140,7 @@ func (s *Server) getReplicator(w http.ResponseWriter, r *http.Request) {
 	info := ReplicatorInfo{
 		ID:    rep.ID,
 		State: rep.State.Current(),
-		Stats: rep.Stats,
+		Stats: rep.Stats(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
