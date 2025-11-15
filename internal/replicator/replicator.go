@@ -124,7 +124,7 @@ func New(opts ...ReplicatorOption) (*Replicator, error) {
 	r := &Replicator{
 		Checkpointer: &NoopCheckpointer{},
 		SourceOptions: SourceOptions{
-			EmptyPollInterval: 5 * time.Second,
+			EmptyPollInterval: 100 * time.Millisecond,
 		},
 		logger:      zap.NewNop(),
 		controlChan: make(chan Signal, 1), // Buffered to prevent blocking
@@ -204,8 +204,10 @@ func (r *Replicator) Run(ctx context.Context) error {
 	r.logger.Info("Replicator started", zap.String("state", string(r.State.Current())))
 
 	var flushTicker *time.Ticker
+	var flushChan <-chan time.Time
 	if r.TargetOptions.FlushTimeout > 0 {
 		flushTicker = time.NewTicker(r.TargetOptions.FlushTimeout)
+		flushChan = flushTicker.C
 		defer flushTicker.Stop()
 	}
 
@@ -235,7 +237,7 @@ func (r *Replicator) Run(ctx context.Context) error {
 			if r.State.Current() == StatePaused {
 				continue
 			}
-		case <-flushTicker.C:
+		case <-flushChan:
 			r.logger.Debug("Flushing to target")
 			if err := r.Target.Flush(ctx); err != nil {
 				r.logger.Error("Error flushing to target", zap.Error(err))

@@ -21,7 +21,7 @@ func newReplicateCommand() *cobra.Command {
 
 	sourceOpts := replicator.SourceOptions{
 		CheckpointBatchSize: 0,
-		EmptyPollInterval:   5 * time.Second,
+		EmptyPollInterval:   500 * time.Millisecond,
 	}
 
 	targetOpts := replicator.TargetOptions{
@@ -127,6 +127,7 @@ func newReplicateCommand() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().DurationVar(&targetOpts.FlushTimeout, "target-flush-timeout", 0, "Flush timeout for target. 0 disables flushing")
 	cmd.Flags().IntVar(&sourceOpts.CheckpointBatchSize, "source-checkpoint-batch-size", 0, "Batch size for checkpointing. 0 disables checkpointing")
 	cmd.Flags().StringVarP(&sourceURL, "source", "s", "", "Source URL for replication (e.g., mongodb://user:pass@host/db)")
 	cmd.Flags().StringVarP(&targetURL, "target", "t", "", "Target URL for replication (e.g., mongodb://user:pass@host/db)")
