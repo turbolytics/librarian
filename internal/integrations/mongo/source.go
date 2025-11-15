@@ -17,6 +17,7 @@ import (
 
 type Source struct {
 	client     *mongo.Client
+	connURI    *url.URL
 	database   string
 	collection string
 	logger     *zap.Logger
@@ -27,17 +28,12 @@ type Source struct {
 }
 
 func NewSource(ctx context.Context, uri *url.URL, logger *zap.Logger) (*Source, error) {
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri.String()))
-	if err != nil {
-		return nil, err
-	}
-
 	// Extract database from URI if needed
 	database := uri.Path[1:]
 	collection := uri.Query().Get("collection")
 
 	return &Source{
-		client:     client,
+		connURI:    uri,
 		database:   database,
 		collection: collection,
 		logger:     logger,
@@ -51,10 +47,16 @@ func NewSource(ctx context.Context, uri *url.URL, logger *zap.Logger) (*Source, 
 	}, nil
 }
 
-func (s *Source) Connect(checkpoint *replicator.Checkpoint) error {
+func (s *Source) Connect(ctx context.Context, checkpoint *replicator.Checkpoint) error {
 	s.statsMu.Lock()
 	s.stats.ConnectionRetries++
 	s.statsMu.Unlock()
+
+	var err error
+	s.client, err = mongo.Connect(ctx, options.Client().ApplyURI(s.connURI.String()))
+	if err != nil {
+		return err
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -115,7 +117,7 @@ func (s *Source) Connect(checkpoint *replicator.Checkpoint) error {
 	return nil
 }
 
-func (s *Source) Disconnect() error {
+func (s *Source) Disconnect(ctx context.Context) error {
 	if s.changeStream != nil {
 		if err := s.changeStream.Close(context.Background()); err != nil {
 			s.statsMu.Lock()
@@ -129,14 +131,11 @@ func (s *Source) Disconnect() error {
 	s.stats.ConnectionHealthy = false
 	s.statsMu.Unlock()
 
-	return s.client.Disconnect(context.Background())
+	return s.client.Disconnect(ctx)
 }
 
 func (s *Source) Close() error {
-	if s.changeStream != nil {
-		s.changeStream.Close(context.Background())
-	}
-	return s.client.Disconnect(context.Background())
+	return s.Disconnect(context.Background())
 }
 
 // Example of processing change events

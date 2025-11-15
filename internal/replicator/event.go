@@ -3,6 +3,7 @@ package replicator
 type Event struct {
 	ID   string `json:"id,omitempty"`
 	Time int64  `json:"time,omitempty"`
+	Op   string `json:"op,omitempty"`
 
 	// Envelope for top level fields
 	// Operation: Type
