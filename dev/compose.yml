@@ -4,6 +4,12 @@ services:
     restart: always
     ports:
       - "5432:5432"
+    command: >
+      postgres
+        -c wal_level=logical
+        -c max_wal_senders=10
+        -c max_replication_slots=10
+        -c logical_decoding_work_mem=64MB
     environment:
       POSTGRES_USER: test
       POSTGRES_PASSWORD: test

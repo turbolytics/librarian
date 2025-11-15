@@ -44,8 +44,8 @@ type SourceOptions struct {
 }
 
 type Source interface {
-	Connect(*Checkpoint) error
-	Disconnect() error
+	Connect(context.Context, *Checkpoint) error
+	Disconnect(context.Context) error
 	Next(ctx context.Context) (Event, error)
 	Stats() SourceStats
 }
@@ -192,7 +192,7 @@ func (r *Replicator) Run(ctx context.Context) error {
 	}
 
 	// Connect to source
-	if err := r.Source.Connect(checkpoint); err != nil {
+	if err := r.Source.Connect(ctx, checkpoint); err != nil {
 		r.State.Transition(StateError)
 		return err
 	}
@@ -215,11 +215,11 @@ func (r *Replicator) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			r.logger.Info("Context cancelled, stopping replicator")
 			r.State.Transition(StateStopped)
-			return r.Source.Disconnect()
+			return r.Source.Disconnect(ctx)
 
 		case signal := <-r.controlChan:
 			r.stats.Replicator.SignalsReceived++
-			if err := r.handleSignal(signal); err != nil {
+			if err := r.handleSignal(ctx, signal); err != nil {
 				r.logger.Error("Error handling signal",
 					zap.String("signal", string(signal)),
 					zap.Error(err))
@@ -292,7 +292,7 @@ func (r *Replicator) SendSignal(signal Signal) {
 	}
 }
 
-func (r *Replicator) handleSignal(signal Signal) error {
+func (r *Replicator) handleSignal(ctx context.Context, signal Signal) error {
 	currentState := r.State.Current()
 
 	switch signal {
@@ -313,13 +313,13 @@ func (r *Replicator) handleSignal(signal Signal) error {
 	case SignalStop:
 		r.logger.Info("Stopping replicator")
 		r.State.Transition(StateStopped)
-		return r.Source.Disconnect()
+		return r.Source.Disconnect(ctx)
 
 	case SignalRestart:
 		r.logger.Info("Restarting replicator")
 
 		// Disconnect and reconnect
-		if err := r.Source.Disconnect(); err != nil {
+		if err := r.Source.Disconnect(ctx); err != nil {
 			r.logger.Error("Error disconnecting during restart", zap.Error(err))
 		}
 
@@ -327,7 +327,7 @@ func (r *Replicator) handleSignal(signal Signal) error {
 			return err
 		}
 
-		if err := r.Source.Connect(r.lastCheckpoint); err != nil {
+		if err := r.Source.Connect(ctx, r.lastCheckpoint); err != nil {
 			r.State.Transition(StateError)
 			return err
 		}
