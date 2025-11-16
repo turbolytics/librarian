@@ -25,7 +25,6 @@ type Source struct {
 	logger *zap.Logger
 
 	database        string
-	table           string
 	slotName        string
 	publicationName string
 
@@ -44,16 +43,15 @@ type Source struct {
 func NewSource(uri *url.URL, logger *zap.Logger) (*Source, error) {
 	query := uri.Query()
 	database := uri.Path[1:]
-	table := query.Get("table")
 
 	slotName := query.Get("slot")
 	if slotName == "" {
-		slotName = fmt.Sprintf("librarian_%s_%s", database, table)
+		slotName = fmt.Sprintf("librarian_%s", database)
 	}
 
 	publicationName := query.Get("publication")
 	if publicationName == "" {
-		publicationName = fmt.Sprintf("librarian_pub_%s_%s", database, table)
+		publicationName = fmt.Sprintf("librarian_pub_%s", database)
 	}
 
 	// Remove custom parameters from the URI to create a clean connection string
@@ -61,7 +59,7 @@ func NewSource(uri *url.URL, logger *zap.Logger) (*Source, error) {
 	for key, values := range query {
 		// Only keep standard PostgreSQL connection parameters
 		switch key {
-		case "table", "slot", "publication":
+		case "slot", "publication":
 			// Remove these custom parameters
 			continue
 		default:
@@ -83,7 +81,6 @@ func NewSource(uri *url.URL, logger *zap.Logger) (*Source, error) {
 	return &Source{
 		connURI:         cleanURI,
 		database:        database,
-		table:           table,
 		slotName:        slotName,
 		publicationName: publicationName,
 
@@ -95,7 +92,6 @@ func NewSource(uri *url.URL, logger *zap.Logger) (*Source, error) {
 			ConnectionHealthy: false,
 			SourceSpecific: map[string]interface{}{
 				"database":         database,
-				"table":            table,
 				"slot_name":        slotName,
 				"publication_name": publicationName,
 			},
@@ -163,17 +159,8 @@ func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
 				return replicator.Event{}, err
 			}
 
-			// Now THIS is what you pass into pglogrepl.Parse
-			/*
-				logicalMsg, err := pglogrepl.Parse(xld.WALData)
-				if err != nil {
-					s.logger.Error("Failed to parse logical WAL data", zap.Error(err))
-					return replicator.Event{}, err
-				}
-			*/
-
 			// handle logicalMsg (Begin/Insert/Update/Delete/Commit/etc)
-			return s.processCopyData(xld.WALData)
+			return s.processCopyData(ctx, xld.WALData)
 
 		default:
 			// ignore other message types
@@ -193,13 +180,12 @@ func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
 	}
 }
 
-func (s *Source) processCopyData(data []byte) (replicator.Event, error) {
+func (s *Source) processCopyData(ctx context.Context, data []byte) (replicator.Event, error) {
 	if len(data) == 0 {
 		return replicator.Event{}, replicator.ErrNoEventsFound
 	}
 
 	// Parse the logical replication message
-	fmt.Println(string(data))
 	msg, err := pglogrepl.Parse(data)
 	if err != nil {
 		return replicator.Event{}, fmt.Errorf("failed to parse logical replication message: %w", err)
@@ -224,7 +210,7 @@ func (s *Source) processCopyData(data []byte) (replicator.Event, error) {
 		return s.handleDelete(msg)
 
 	case *pglogrepl.CommitMessage:
-		return s.handleCommit(msg)
+		return s.handleCommit(ctx, msg)
 
 	case *pglogrepl.BeginMessage:
 		s.logger.Debug("Transaction begin", zap.Uint32("xid", msg.Xid))
@@ -242,11 +228,6 @@ func (s *Source) handleInsert(msg *pglogrepl.InsertMessage) (replicator.Event, e
 		return replicator.Event{}, fmt.Errorf("unknown relation ID: %d", msg.RelationID)
 	}
 
-	// Skip if not our target table
-	if rel.RelationName != s.table {
-		return replicator.Event{}, replicator.ErrNoEventsFound
-	}
-
 	values := s.tupleToMap(rel, msg.Tuple)
 
 	// Update stats
@@ -259,11 +240,11 @@ func (s *Source) handleInsert(msg *pglogrepl.InsertMessage) (replicator.Event, e
 
 	event := replicator.Event{
 		ID:       uuid.New().String(),
-		Op:       "INSERT",
+		Op:       replicator.OpInsert,
 		Time:     time.Now().Unix(),
 		Position: []byte(s.currentLSN.String()),
 		Payload: map[string]interface{}{
-			"operation": "INSERT",
+			"operation": replicator.OpInsert,
 			"table":     rel.RelationName,
 			"schema":    rel.Namespace,
 			"data":      values,
@@ -284,10 +265,6 @@ func (s *Source) handleUpdate(msg *pglogrepl.UpdateMessage) (replicator.Event, e
 		return replicator.Event{}, fmt.Errorf("unknown relation ID: %d", msg.RelationID)
 	}
 
-	if rel.RelationName != s.table {
-		return replicator.Event{}, replicator.ErrNoEventsFound
-	}
-
 	var oldValues map[string]interface{}
 	if msg.OldTuple != nil {
 		oldValues = s.tupleToMap(rel, msg.OldTuple)
@@ -304,11 +281,11 @@ func (s *Source) handleUpdate(msg *pglogrepl.UpdateMessage) (replicator.Event, e
 
 	event := replicator.Event{
 		ID:       uuid.New().String(),
-		Op:       "UPDATE",
+		Op:       replicator.OpUpdate,
 		Time:     time.Now().Unix(),
 		Position: []byte(s.currentLSN.String()),
 		Payload: map[string]interface{}{
-			"operation": "UPDATE",
+			"operation": replicator.OpUpdate,
 			"table":     rel.RelationName,
 			"schema":    rel.Namespace,
 			"data":      newValues,
@@ -330,10 +307,6 @@ func (s *Source) handleDelete(msg *pglogrepl.DeleteMessage) (replicator.Event, e
 		return replicator.Event{}, fmt.Errorf("unknown relation ID: %d", msg.RelationID)
 	}
 
-	if rel.RelationName != s.table {
-		return replicator.Event{}, replicator.ErrNoEventsFound
-	}
-
 	var oldValues map[string]interface{}
 	if msg.OldTuple != nil {
 		oldValues = s.tupleToMap(rel, msg.OldTuple)
@@ -348,11 +321,11 @@ func (s *Source) handleDelete(msg *pglogrepl.DeleteMessage) (replicator.Event, e
 
 	event := replicator.Event{
 		ID:       uuid.New().String(),
-		Op:       "DELETE",
+		Op:       replicator.OpDelete,
 		Time:     time.Now().Unix(),
 		Position: []byte(s.currentLSN.String()),
 		Payload: map[string]interface{}{
-			"operation": "DELETE",
+			"operation": replicator.OpDelete,
 			"table":     rel.RelationName,
 			"schema":    rel.Namespace,
 			"old_data":  oldValues,
@@ -367,13 +340,13 @@ func (s *Source) handleDelete(msg *pglogrepl.DeleteMessage) (replicator.Event, e
 	return event, nil
 }
 
-func (s *Source) handleCommit(msg *pglogrepl.CommitMessage) (replicator.Event, error) {
+func (s *Source) handleCommit(ctx context.Context, msg *pglogrepl.CommitMessage) (replicator.Event, error) {
 	// Update our current LSN
 	s.currentLSN = msg.CommitLSN
 
 	// Send heartbeat back to PostgreSQL periodically
 	if time.Since(s.lastHeartbeat) > 30*time.Second {
-		err := pglogrepl.SendStandbyStatusUpdate(context.Background(), s.replConn, pglogrepl.StandbyStatusUpdate{
+		err := pglogrepl.SendStandbyStatusUpdate(ctx, s.replConn, pglogrepl.StandbyStatusUpdate{
 			WALWritePosition: msg.CommitLSN,
 			WALFlushPosition: msg.CommitLSN,
 			WALApplyPosition: msg.CommitLSN,
@@ -510,7 +483,6 @@ func (s *Source) Connect(ctx context.Context, checkpoint *replicator.Checkpoint)
 
 	s.logger.Info("PostgreSQL replication started",
 		zap.String("database", s.database),
-		zap.String("table", s.table),
 		zap.String("slot", s.slotName),
 		zap.String("publication", s.publicationName),
 		zap.String("start_lsn", startLSN.String()))
@@ -561,27 +533,9 @@ func (s *Source) setupReplication(ctx context.Context) error {
 	}
 
 	if !exists {
-		return fmt.Errorf("publication '%s' does not exist. Please create it manually with: CREATE PUBLICATION %s FOR TABLE %s",
-			s.publicationName, s.publicationName, s.table)
+		return fmt.Errorf("publication '%s' does not exist. Please create it manually with: CREATE PUBLICATION %s",
+			s.publicationName, s.publicationName)
 	}
-
-	// Publication should be managed outside of librarian
-	/*
-		if !exists {
-			// Create publication for the table
-			createPubSQL := fmt.Sprintf(
-				"CREATE PUBLICATION %s FOR TABLE %s",
-				pgx.Identifier{s.publicationName}.Sanitize(),
-				pgx.Identifier{s.table}.Sanitize(),
-			)
-
-			_, err = s.regularConn.Exec(ctx, createPubSQL)
-			if err != nil {
-				return fmt.Errorf("failed to create publication: %w", err)
-			}
-			s.logger.Info("Created publication", zap.String("publication", s.publicationName))
-		}
-	*/
 
 	// Check if replication slot exists
 	err = s.regularConn.QueryRow(ctx,

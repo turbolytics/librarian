@@ -10,4 +10,4 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO dbz;
 -- Optional: create publication covering desired tables (or ALL TABLES)
 -- Debezium can also create/require this, but doing it here is explicit:
 \c test 
-CREATE PUBLICATION librarian_pub_test_users FOR ALL TABLES;
+CREATE PUBLICATION librarian_pub_test FOR ALL TABLES;

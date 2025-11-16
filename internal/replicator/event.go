@@ -1,9 +1,17 @@
 package replicator
 
+type Operation string
+
+const (
+	OpInsert Operation = "insert"
+	OpUpdate Operation = "update"
+	OpDelete Operation = "delete"
+)
+
 type Event struct {
-	ID   string `json:"id,omitempty"`
-	Time int64  `json:"time,omitempty"`
-	Op   string `json:"op,omitempty"`
+	ID   string    `json:"id,omitempty"`
+	Time int64     `json:"time,omitempty"`
+	Op   Operation `json:"op,omitempty"`
 
 	// Envelope for top level fields
 	// Operation: Type
