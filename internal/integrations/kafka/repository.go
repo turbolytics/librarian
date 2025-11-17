@@ -177,88 +177,8 @@ func (r *Repository) Write(ctx context.Context, event replicator.Event) error {
 
 // Flush is a noop since the kafka producer handles batching internally
 func (r *Repository) Flush(ctx context.Context) error {
-	/*
-		if n := r.producer.Flush(5000); n > 0 {
-			err := fmt.Errorf("failed to flush all messages to Kafka, %d remaining", n)
-			r.statsMu.Lock()
-			r.stats.WriteErrorCount++
-			r.stats.LastError = err.Error()
-			r.statsMu.Unlock()
-			return err
-		}
-	*/
 	return nil
 }
-
-/*
-
-	r.statsMu.Lock()
-	r.logger.Debug("Flushing events to Kafka", zap.Int("buffer_size", len(r.eventBuffer)))
-	eventsToFlush := make([]replicator.Event, len(r.eventBuffer))
-	copy(eventsToFlush, r.eventBuffer)
-	r.eventBuffer = r.eventBuffer[:0] // Clear buffer
-	r.stats.PendingEvents = 0
-	r.statsMu.Unlock()
-
-	if len(eventsToFlush) == 0 {
-		return nil
-	}
-
-	// Send all events to Kafka
-	for _, event := range eventsToFlush {
-		// Serialize event to JSON
-		eventData, err := json.Marshal(event)
-		if err != nil {
-			r.statsMu.Lock()
-			r.stats.WriteErrorCount++
-			r.stats.LastError = err.Error()
-			r.statsMu.Unlock()
-			return err
-		}
-
-		// Create Kafka message
-		message := &kafka.Message{
-			TopicPartition: kafka.TopicPartition{
-				Topic:     &r.topic,
-				Partition: kafka.PartitionAny,
-			},
-			Key:   []byte(event.ID),
-			Value: eventData,
-		}
-
-		// Send message (non-blocking)
-		if err := r.producer.Produce(message, nil); err != nil {
-			r.statsMu.Lock()
-			r.stats.WriteErrorCount++
-			r.stats.LastError = err.Error()
-			r.statsMu.Unlock()
-			return err
-		}
-	}
-
-	// Wait for all messages to be delivered
-	if n := r.producer.Flush(1000); n > 0 {
-		err := fmt.Errorf("failed to flush all messages to Kafka, %d remaining", n)
-		r.statsMu.Lock()
-		r.stats.WriteErrorCount++
-		r.stats.LastError = err.Error()
-		r.statsMu.Unlock()
-		return err
-	}
-
-	// Update stats
-	r.statsMu.Lock()
-	r.stats.LastFlushAt = time.Now()
-	r.stats.LastError = ""
-	r.statsMu.Unlock()
-
-	r.logger.Info("Flushed events to Kafka",
-		zap.Int("event_count", len(eventsToFlush)),
-		zap.String("topic", r.topic))
-
-	return nil
-}
-*/
 
 func (r *Repository) Close(ctx context.Context) error {
 	return r.Disconnect(ctx)

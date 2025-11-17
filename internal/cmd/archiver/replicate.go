@@ -3,11 +3,13 @@ package archiver
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/turbolytics/librarian/internal/integrations/kafka"
 	"github.com/turbolytics/librarian/internal/integrations/mongo"
+	"github.com/turbolytics/librarian/internal/integrations/postgres"
 	"github.com/turbolytics/librarian/internal/replicator"
 	"go.uber.org/zap"
 )
@@ -19,7 +21,7 @@ func newReplicateCommand() *cobra.Command {
 
 	sourceOpts := replicator.SourceOptions{
 		CheckpointBatchSize: 0,
-		EmptyPollInterval:   5 * time.Second,
+		EmptyPollInterval:   500 * time.Millisecond,
 	}
 
 	targetOpts := replicator.TargetOptions{
@@ -60,6 +62,16 @@ func newReplicateCommand() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("failed to create MongoDB source: %w", err)
 				}
+
+			case "postgres":
+				l.Info("initializing Postgres source", zap.String("url", sourceURL))
+				source, err = postgres.NewSource(
+					sourceURLParsed,
+					l,
+				)
+				if err != nil {
+					return fmt.Errorf("failed to create Postgres source: %w", err)
+				}
 			default:
 				return fmt.Errorf("unsupported source protocol: %s", sourceURLParsed.Scheme)
 			}
@@ -95,6 +107,7 @@ func newReplicateCommand() *cobra.Command {
 			go func() {
 				if err := r.Run(cmd.Context()); err != nil {
 					l.Error("replicator error", zap.Error(err))
+					os.Exit(1)
 				}
 			}()
 
@@ -104,6 +117,7 @@ func newReplicateCommand() *cobra.Command {
 			go func() {
 				if err := s.Start(cmd.Context(), ":8080"); err != nil {
 					l.Error("replicator server error", zap.Error(err))
+					os.Exit(1)
 				}
 			}()
 
@@ -113,6 +127,7 @@ func newReplicateCommand() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().DurationVar(&targetOpts.FlushTimeout, "target-flush-timeout", 0, "Flush timeout for target. 0 disables flushing")
 	cmd.Flags().IntVar(&sourceOpts.CheckpointBatchSize, "source-checkpoint-batch-size", 0, "Batch size for checkpointing. 0 disables checkpointing")
 	cmd.Flags().StringVarP(&sourceURL, "source", "s", "", "Source URL for replication (e.g., mongodb://user:pass@host/db)")
 	cmd.Flags().StringVarP(&targetURL, "target", "t", "", "Target URL for replication (e.g., mongodb://user:pass@host/db)")
