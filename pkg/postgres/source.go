@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
-	"github.com/turbolytics/librarian/internal/replicator"
+	"github.com/turbolytics/librarian/pkg/replicator"
 	"go.uber.org/zap"
 )
 
