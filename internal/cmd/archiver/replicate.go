@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/turbolytics/librarian/internal/integrations/kafka"
-	"github.com/turbolytics/librarian/internal/integrations/mongo"
-	"github.com/turbolytics/librarian/internal/integrations/postgres"
-	"github.com/turbolytics/librarian/internal/replicator"
+	"github.com/turbolytics/librarian/pkg/mongo"
+	"github.com/turbolytics/librarian/pkg/postgres"
+	"github.com/turbolytics/librarian/pkg/replicator"
 	"go.uber.org/zap"
 )
 

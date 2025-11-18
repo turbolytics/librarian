@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/turbolytics/librarian/internal/replicator"
+	"github.com/turbolytics/librarian/pkg/replicator"
 	"go.uber.org/zap"
 )
 
