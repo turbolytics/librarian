@@ -1,92 +1,160 @@
 # Librarian
 
-Librarian is a modern cloud-native kafka connect alternative. Librarian uses native data replication technologies (such as Postgres Replication and Mongo Changestreams) to efficiently archive data.
+Librarian is a cloud-native database replicator designed as a modern replacement for Kafka Connect. It uses native database replication technologies like MongoDB Change Streams and PostgreSQL logical replication to efficiently stream data changes to message brokers and storage systems.
 
-Think of Librarian as Kafka Connect CDC source for modern data world.
+## Why Librarian?
 
-## What makes librarian Modern?
+- **Single Binary**: No JVM, no external dependencies, no connector management
+- **Cloud Native**: Built-in metrics, tracing, and observability
+- **Lightweight**: Runs on modest hardware with minimal resource overhead
+- **Simple Configuration**: URL-based source and target configuration
 
-- Librarian is distributed as a single binary with no external dependencies.
-- Librarian includes data integrity checks to ensure correctness.
-- Librarian includes data-oriented observability out of the box, including latency and completeness.
-- Librarian is runnable as a daemon or as a batch process.
+## Supported Sources
 
-## What Makes librarian cloud-native?
+- MongoDB (Change Streams)
+- PostgreSQL (Logical Replication)
 
-- Librarian includes modern telemetry including metrics and tracing natively. 
-- Librarian is performant and efficient, deployable on modest hardware instances. 
+## Supported Targets
 
+- Kafka
+- S3 (Parquet)
+- Local filesystem
 
-# Features and Roadmap.
-- [x] Postgres Snapshot
-- [x] Parquet Serialization
-- [x] Parquet Schema Generation from sql CREATE Statement
-- [x] S3 Persistence
-- [x] Data Observability - Snapshot Completeness
-- [ ] Mongo Snapshot
-- [ ] Postgres CDC
-- [ ] Mongo CDC
-- [ ] Ephemeral change streams
-- [ ] Debezium Messages Format Compatibility
+## Quickstart
 
+Stream MongoDB changes to Kafka in minutes.
 
-## Data Snapshots
+### 1. Start Backing Services
 
-Snapshots capture the state of data at a specific point in time. They are simple to create and maintain because each snapshot is an isolated copy. This reduces complexity compared to incremental or differential backups.
+Start MongoDB (with replica set) and Kafka:
 
-Snapshots are operationally forgiving. If a snapshot fails or becomes corrupted, previous snapshots remain intact. Each snapshot is independent, allowing easy recovery without affecting other snapshots. This independence simplifies debugging and rollback processes.
-
-By using snapshots, you ensure data durability and maintain a reliable history of changes.
-
-Librarian supports data snapshots for Postgres tables and archiving the snapshot using Parquet, either locally or remotely in s3. 
-
-The following image describes Librarian snapshots:
-
-<img width="843" alt="Screenshot 2024-12-14 at 5 27 18 PM" src="https://github.com/user-attachments/assets/06d5b502-7bd1-4575-b127-4c85091e9fe2" />
-
-1. Librarian Issues a `SELECT` query to postgres.
-2. Librarian "preserves" (serializes/encodes) data to parquet.
-3. Librarian saves the snapshotted data to local disk or s3.
-
-
-# Quickstart 
-
-The easiest way to get started with librarian is to clone this repo. 
-
-## Tutorial: Generate a Postgres Parquet Snapshot Locally
-
-This tutorial will perform a local snapshot using a sample postgres dataset. The end result 
-will be a valid local parquet file that contains a snapshot of the postgres table.
-
-- Start Postgres Locally
-```
-docker-compose -f dev/compose.yml up -d
-```
-- Use librarian to snapshot postgres property sales test dataset and save it locally
-```
-time go run cmd/librarian/main.go archiver snapshot -c dev/examples/property-sales.snapshot.yml
+```bash
+make start-backing-services
 ```
 
-- Check librarian stdout for the location of the parquet snapshot file
-<img width="1512" alt="Screenshot 2024-12-10 at 7 54 46 PM" src="https://github.com/user-attachments/assets/91293df5-64eb-46cd-99e9-9972aceaf409">
+### 2. Start the Replicator
 
+Run the replicator to stream changes from MongoDB to Kafka:
 
-- Query the Parquet file using duckdb :)
-<img width="1512" alt="Screenshot 2024-12-10 at 7 55 44 PM" src="https://github.com/user-attachments/assets/6ecca3f7-a4da-4cdc-9814-9a4ac910dd50">
-
-- Inspect the snapshot catalog
+```bash
+LIBRARIAN_LOG_LEVEL=DEBUG go run cmd/librarian/main.go archiver replicate \
+  --source "mongodb://localhost:27017/test?authSource=admin&collection=users" \
+  --id=mongodb.test.users \
+  -t "kafka://localhost:9092/order-events"
 ```
-cat data/property_sales/7900e2f0-b75a-11ef-8e40-9e78fe1d02fa/catalog.json| jq .
 
+You should see output indicating the replicator has started:
+
+```
+2025-11-19T08:22:38.855-0500    INFO    librarian.replicator    archiver/replicate.go:69        starting replicator!
+2025-11-19T08:22:38.856-0500    INFO    librarian.replicator    archiver/replicate.go:71        replicating data...
+2025-11-19T08:22:38.856-0500    INFO    librarian.replicator    archiver/replicate.go:86        initializing MongoDB source     {"url": "mongodb://localhost:27017/test?authSource=admin&collection=users"}
+2025-11-19T08:22:38.856-0500    INFO    librarian.replicator    archiver/replicate.go:112       initializing kafka target       {"url": "kafka://localhost:9092/order-events"}
+2025-11-19T08:22:38.856-0500    INFO    librarian.replicator    replicator/replicator.go:142    Replicator created      {"state": "created"}
+2025-11-19T08:22:38.856-0500    INFO    librarian.replicator    replicator/server.go:40 replicator registered   {"replicator_id": "mongodb.test.users", "state": "created"}
+2025-11-19T08:22:38.856-0500    INFO    librarian.replicator    replicator/server.go:156        starting replicator server      {"addr": ":8080"}
+2025-11-19T08:22:38.856-0500    INFO    librarian.replicator.fsm        replicator/fsm.go:124   State transitioned      {"state": "connecting", "from": "created"}
+2025-11-19T08:22:38.856-0500    INFO    librarian.replicator    replicator/replicator.go:159    Starting replicator     {"state": "connecting", "source-options": "{CheckpointBatchSize:0 EmptyPollInterval:500ms}", "target-options": "{FlushTimeout:0s}"}
+2025-11-19T08:22:38.856-0500    INFO    librarian.replicator    replicator/checkpoint.go:65     No checkpoint found     {"replicator_id": "mongodb.test.users"}
+2025-11-19T08:22:38.856-0500    INFO    librarian.replicator    replicator/replicator.go:184    No checkpoint found, starting fresh      {"replicator_id": "mongodb.test.users"}
+```
+
+### 3. Insert a Test Record
+
+In another terminal, connect to MongoDB and insert a record:
+
+```bash
+docker exec -it dev_mongodb_1 mongosh
+```
+
+```javascript
+rs0 [direct: primary] test> db.users.insert({"name":"test"});
 {
-  "id": "7900e2f0-b75a-11ef-8e40-9e78fe1d02fa",
-  "start_time": "2024-12-11T00:54:27.725337Z",
-  "end_time": "2024-12-11T00:54:32.492852Z",
-  "source": "public.property_sales",
-  "num_source_records": 1097629,
-  "num_records_processed": 1097629,
-  "success": true
+  acknowledged: true,
+  insertedIds: { '0': ObjectId('691dc55aa7af9969a1b1ddf4') }
 }
 ```
 
+### 4. Verify Replication
 
+Back in the replicator terminal, you'll see the change event processed:
+
+```
+2025-11-19T08:22:39.356-0500    DEBUG   librarian.replicator    replicator/replicator.go:220    Change event received   {"operation": "insert", "collection": "users"}
+2025-11-19T08:22:39.357-0500    DEBUG   librarian.replicator    replicator/replicator.go:245    Message sent to Kafka   {"topic": "order-events", "partition": 0}
+```
+
+The document is now available in your Kafka topic.
+
+## PostgreSQL to Kafka Example
+
+Stream PostgreSQL changes to Kafka using logical replication.
+
+### 1. Start the Replicator
+
+Run the replicator to stream changes from PostgreSQL to Kafka:
+
+```bash
+LIBRARIAN_LOG_LEVEL=DEBUG go run cmd/librarian/main.go archiver replicate \
+  --source "postgres://test:test@localhost:5432/test?slot=librarian_users&sslmode=disable" \
+  --target "kafka://localhost:9092/postgres-changes" \
+  --id=postgres-to-kafka
+```
+
+You should see output indicating the replicator has started:
+
+```
+2025-11-19T15:07:17.718-0500    INFO    librarian.replicator    archiver/replicate.go:69        starting replicator!
+2025-11-19T15:07:17.718-0500    INFO    librarian.replicator    archiver/replicate.go:71        replicating data...
+2025-11-19T15:07:17.718-0500    INFO    librarian.replicator    archiver/replicate.go:97        initializing Postgres source    {"url": "postgres://test:test@localhost:5432/test?slot=librarian_users&sslmode=disable"}
+2025-11-19T15:07:17.718-0500    INFO    librarian.replicator    archiver/replicate.go:112       initializing kafka target       {"url": "kafka://localhost:9092/postgres-changes"}
+2025-11-19T15:07:17.718-0500    INFO    librarian.replicator    replicator/replicator.go:142    Replicator created      {"state": "created"}
+2025-11-19T15:07:17.719-0500    INFO    librarian.replicator    replicator/server.go:40 replicator registered   {"replicator_id": "postgres-to-kafka", "state": "created"}
+2025-11-19T15:07:17.719-0500    INFO    librarian.replicator    replicator/server.go:156        starting replicator server      {"addr": ":8080"}
+2025-11-19T15:07:17.719-0500    INFO    librarian.replicator.fsm        replicator/fsm.go:124   State transitioned      {"state": "connecting", "from": "created"}
+2025-11-19T15:07:17.719-0500    INFO    librarian.replicator    replicator/replicator.go:159    Starting replicator     {"state": "connecting", "source-options": "{CheckpointBatchSize:0 EmptyPollInterval:500ms}", "target-options": "{FlushTimeout:0s}"}
+2025-11-19T15:07:17.719-0500    INFO    librarian.replicator    replicator/checkpoint.go:65     No checkpoint found     {"replicator_id": "postgres-to-kafka"}
+2025-11-19T15:07:17.719-0500    INFO    librarian.replicator    replicator/replicator.go:184    No checkpoint found, starting fresh     {"replicator_id": "postgres-to-kafka"}
+2025-11-19T15:07:17.734-0500    INFO    librarian.replicator    kafka/repository.go:121 Kafka target connected  {"topic": "postgres-changes", "brokers": "localhost:9092"}
+2025-11-19T15:07:17.776-0500    INFO    librarian.replicator    postgres/source.go:582  Starting from current LSN       {"lsn": "0/1995338"}
+2025-11-19T15:07:17.777-0500    INFO    librarian.replicator    postgres/source.go:483  PostgreSQL replication started  {"database": "test", "slot": "librarian_users", "publication": "librarian_pub_test", "start_lsn": "0/1995338"}
+2025-11-19T15:07:17.777-0500    INFO    librarian.replicator.fsm        replicator/fsm.go:124   State transitioned      {"state": "streaming", "from": "connecting"}
+2025-11-19T15:07:17.777-0500    INFO    librarian.replicator    replicator/replicator.go:204    Replicator started      {"state": "streaming"}
+```
+
+### 2. Insert a Test Record
+
+In another terminal, connect to PostgreSQL and insert a record:
+
+```bash
+docker exec -it dev_postgres_1 psql -U test
+```
+
+```sql
+test=# INSERT INTO users (account, signup_time) VALUES ('alice19example.com', NOW());
+INSERT 0 1
+```
+
+### 3. Verify Replication
+
+Back in the replicator terminal, you'll see the change event processed:
+
+```
+2025-11-19T15:07:21.786-0500    DEBUG   librarian.replicator    postgres/source.go:215  Transaction begin       {"xid": 830}
+2025-11-19T15:07:22.288-0500    DEBUG   librarian.replicator    postgres/source.go:197  Stored relation info    {"relation": "users", "relation_id": 16400}
+2025-11-19T15:07:22.790-0500    DEBUG   librarian.replicator    postgres/source.go:253  PostgreSQL INSERT event {"table": "users", "lsn": "0/1995338", "data": {"account":"alice19example.com","signup_time":"2025-11-19 20:07:20.830027"}}
+2025-11-19T15:07:22.824-0500    DEBUG   librarian.replicator    kafka/repository.go:110 Message delivered       {"topic": "postgres-changes", "partition": 0, "offset": 54}
+```
+
+The row is now available in your Kafka topic.
+
+## Features
+
+- Real-time change data capture (CDC)
+- Automatic checkpointing and resume
+- HTTP health check endpoint (`:8080`)
+- Configurable batch sizes and flush intervals
+
+## License
+
+MIT

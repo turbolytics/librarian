@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -12,6 +13,7 @@ import (
 	"github.com/turbolytics/librarian/pkg/postgres"
 	"github.com/turbolytics/librarian/pkg/replicator"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 func newReplicateCommand() *cobra.Command {
@@ -32,7 +34,35 @@ func newReplicateCommand() *cobra.Command {
 		Use:   "replicate",
 		Short: "Replicates data from source to target",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger, _ := zap.NewDevelopment()
+			// Configure log level from environment variable, defaulting to INFO
+			logLevel := zapcore.InfoLevel
+			if levelStr := os.Getenv("LIBRARIAN_LOG_LEVEL"); levelStr != "" {
+				switch strings.ToUpper(levelStr) {
+				case "DEBUG":
+					logLevel = zapcore.DebugLevel
+				case "INFO":
+					logLevel = zapcore.InfoLevel
+				case "WARN", "WARNING":
+					logLevel = zapcore.WarnLevel
+				case "ERROR":
+					logLevel = zapcore.ErrorLevel
+				case "DPANIC":
+					logLevel = zapcore.DPanicLevel
+				case "PANIC":
+					logLevel = zapcore.PanicLevel
+				case "FATAL":
+					logLevel = zapcore.FatalLevel
+				default:
+					return fmt.Errorf("invalid log level: %s (valid levels: DEBUG, INFO, WARN, ERROR, DPANIC, PANIC, FATAL)", levelStr)
+				}
+			}
+
+			config := zap.NewDevelopmentConfig()
+			config.Level = zap.NewAtomicLevelAt(logLevel)
+			logger, err := config.Build()
+			if err != nil {
+				return fmt.Errorf("failed to create logger: %w", err)
+			}
 			defer logger.Sync()
 			l := logger.Named("librarian.replicator")
 

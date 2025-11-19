@@ -114,7 +114,6 @@ func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
 	msg, err := s.replConn.ReceiveMessage(receiveCtx)
 	if err != nil {
 		if pgconn.Timeout(err) {
-			s.logger.Debug("No new WAL messages")
 			return replicator.Event{}, replicator.ErrNoEventsFound
 		}
 
@@ -251,7 +250,7 @@ func (s *Source) handleInsert(msg *pglogrepl.InsertMessage) (replicator.Event, e
 		},
 	}
 
-	s.logger.Info("PostgreSQL INSERT event",
+	s.logger.Debug("PostgreSQL INSERT event",
 		zap.String("table", rel.RelationName),
 		zap.String("lsn", s.currentLSN.String()),
 		zap.Any("data", values))
