@@ -152,7 +152,7 @@ func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
 			return replicator.Event{}, err
 		}
 
-		s.logger.Info("No more change events")
+		s.logger.Debug("No more change events")
 		return replicator.Event{}, replicator.ErrNoEventsFound
 	}
 
@@ -180,7 +180,7 @@ func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
 
 	token := base64.StdEncoding.EncodeToString(s.changeStream.ResumeToken())
 
-	s.logger.Info("Change event received",
+	s.logger.Debug("Change event received",
 		zap.String("operation", changeEvent["operationType"].(string)),
 		zap.Any("document_key", changeEvent["documentKey"]),
 		zap.Any("event", changeEvent),

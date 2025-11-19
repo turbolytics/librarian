@@ -107,7 +107,7 @@ func (r *Repository) Connect(ctx context.Context) error {
 					r.logger.Error("Delivery failed", zap.Error(ev.TopicPartition.Error))
 					// Add your retry logic, DLQ, or alerting here
 				} else {
-					r.logger.Info("Message delivered",
+					r.logger.Debug("Message delivered",
 						zap.String("topic", *ev.TopicPartition.Topic),
 						zap.Int32("partition", ev.TopicPartition.Partition),
 						zap.Int64("offset", int64(ev.TopicPartition.Offset)))
