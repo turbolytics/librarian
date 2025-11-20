@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -237,16 +236,29 @@ func (s *Source) handleInsert(msg *pglogrepl.InsertMessage) (replicator.Event, e
 	s.stats.SourceSpecific["current_lsn"] = s.currentLSN.String()
 	s.statsMu.Unlock()
 
+	now := time.Now()
+	lsnInt := int64(s.currentLSN)
+
 	event := replicator.Event{
-		ID:       uuid.New().String(),
-		Op:       replicator.OpInsert,
-		Time:     time.Now().Unix(),
 		Position: []byte(s.currentLSN.String()),
-		Payload: map[string]interface{}{
-			"operation": replicator.OpInsert,
-			"table":     rel.RelationName,
-			"schema":    rel.Namespace,
-			"data":      values,
+		Payload: replicator.Payload{
+			Before: nil,
+			After:  values,
+			Source: replicator.EventSource{
+				Version:   "1.0.0",
+				Connector: "postgresql",
+				Name:      s.database,
+				TsMs:      now.UnixMilli(),
+				Snapshot:  "false",
+				Db:        s.database,
+				Schema:    rel.Namespace,
+				Table:     rel.RelationName,
+				Lsn:       lsnInt,
+				Xmin:      nil,
+			},
+			Op:          replicator.OpCreate,
+			TsMs:        now.UnixMilli(),
+			Transaction: nil,
 		},
 	}
 
@@ -278,17 +290,29 @@ func (s *Source) handleUpdate(msg *pglogrepl.UpdateMessage) (replicator.Event, e
 	s.stats.SourceSpecific["current_lsn"] = s.currentLSN.String()
 	s.statsMu.Unlock()
 
+	now := time.Now()
+	lsnInt := int64(s.currentLSN)
+
 	event := replicator.Event{
-		ID:       uuid.New().String(),
-		Op:       replicator.OpUpdate,
-		Time:     time.Now().Unix(),
 		Position: []byte(s.currentLSN.String()),
-		Payload: map[string]interface{}{
-			"operation": replicator.OpUpdate,
-			"table":     rel.RelationName,
-			"schema":    rel.Namespace,
-			"data":      newValues,
-			"old_data":  oldValues,
+		Payload: replicator.Payload{
+			Before: oldValues,
+			After:  newValues,
+			Source: replicator.EventSource{
+				Version:   "1.0.0",
+				Connector: "postgresql",
+				Name:      s.database,
+				TsMs:      now.UnixMilli(),
+				Snapshot:  "false",
+				Db:        s.database,
+				Schema:    rel.Namespace,
+				Table:     rel.RelationName,
+				Lsn:       lsnInt,
+				Xmin:      nil,
+			},
+			Op:          replicator.OpUpdate,
+			TsMs:        now.UnixMilli(),
+			Transaction: nil,
 		},
 	}
 
@@ -318,16 +342,29 @@ func (s *Source) handleDelete(msg *pglogrepl.DeleteMessage) (replicator.Event, e
 	s.stats.SourceSpecific["current_lsn"] = s.currentLSN.String()
 	s.statsMu.Unlock()
 
+	now := time.Now()
+	lsnInt := int64(s.currentLSN)
+
 	event := replicator.Event{
-		ID:       uuid.New().String(),
-		Op:       replicator.OpDelete,
-		Time:     time.Now().Unix(),
 		Position: []byte(s.currentLSN.String()),
-		Payload: map[string]interface{}{
-			"operation": replicator.OpDelete,
-			"table":     rel.RelationName,
-			"schema":    rel.Namespace,
-			"old_data":  oldValues,
+		Payload: replicator.Payload{
+			Before: oldValues,
+			After:  nil,
+			Source: replicator.EventSource{
+				Version:   "1.0.0",
+				Connector: "postgresql",
+				Name:      s.database,
+				TsMs:      now.UnixMilli(),
+				Snapshot:  "false",
+				Db:        s.database,
+				Schema:    rel.Namespace,
+				Table:     rel.RelationName,
+				Lsn:       lsnInt,
+				Xmin:      nil,
+			},
+			Op:          replicator.OpDelete,
+			TsMs:        now.UnixMilli(),
+			Transaction: nil,
 		},
 	}
 

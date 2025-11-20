@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/turbolytics/librarian/pkg/replicator"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -186,11 +185,51 @@ func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
 		zap.Any("event", changeEvent),
 	)
 
+	// Convert MongoDB operation type to Debezium operation code
+	opType := changeEvent["operationType"].(string)
+	var op replicator.Operation
+	switch opType {
+	case "insert":
+		op = replicator.OpCreate
+	case "update", "replace":
+		op = replicator.OpUpdate
+	case "delete":
+		op = replicator.OpDelete
+	default:
+		op = replicator.OpRead
+	}
+
+	// Extract before/after data based on operation type
+	var before, after map[string]interface{}
+	if fullDoc, ok := changeEvent["fullDocument"].(bson.M); ok {
+		after = fullDoc
+	}
+	if fullDocBefore, ok := changeEvent["fullDocumentBeforeChange"].(bson.M); ok {
+		before = fullDocBefore
+	}
+
+	now := time.Now()
+
 	return replicator.Event{
-		ID:       uuid.New().String(),
-		Time:     time.Now().Unix(),
-		Payload:  changeEvent,
 		Position: []byte(token),
+		Payload: replicator.Payload{
+			Before: before,
+			After:  after,
+			Source: replicator.EventSource{
+				Version:   "1.0.0",
+				Connector: "mongodb",
+				Name:      s.database,
+				TsMs:      now.UnixMilli(),
+				Snapshot:  "false",
+				Db:        s.database,
+				Schema:    s.collection, // MongoDB doesn't have schemas, use collection
+				Table:     s.collection,
+				Xmin:      nil,
+			},
+			Op:          op,
+			TsMs:        now.UnixMilli(),
+			Transaction: nil,
+		},
 	}, nil
 }
 
