@@ -155,6 +155,67 @@ The row is now available in your Kafka topic.
 - HTTP health check endpoint (`:8080`)
 - Configurable batch sizes and flush intervals
 
+## Debezium Message Compatibility
+
+Librarian produces change events in a Debezium-compatible message format, allowing you to use existing Debezium consumers and downstream tools without modification.
+
+### Message Structure
+
+Each change event follows the standard Debezium envelope structure:
+
+```json
+{
+  "payload": {
+    "before": {...},
+    "after": {...},
+    "source": {
+      "version": "1.0.0",
+      "connector": "librarian",
+      "name": "replicator-id",
+      "ts_ms": 1234567890,
+      "snapshot": "false",
+      "db": "database-name",
+      "schema": "schema-name",
+      "table": "table-name",
+      "lsn": 12345,
+      "txId": 678
+    },
+    "op": "c",
+    "ts_ms": 1234567890,
+    "transaction": {
+      "id": "tx-id",
+      "total_order": 1,
+      "data_collection_order": 1
+    }
+  }
+}
+```
+
+### Operation Codes
+
+Librarian uses standard Debezium operation codes:
+
+- `c` - Create/Insert
+- `u` - Update
+- `d` - Delete
+- `r` - Read (snapshot)
+
+### Source Metadata
+
+The `source` field contains metadata about the origin of the change event:
+
+- **MongoDB**: Includes resume token information, collection name, and timestamp
+- **PostgreSQL**: Includes LSN (Log Sequence Number), transaction ID, schema, and table name
+
+### Compatibility
+
+Because Librarian produces Debezium-compatible messages, you can:
+
+- Use existing Debezium consumers without modification
+- Leverage Debezium-aware tools and frameworks (e.g., Kafka Connect transformations)
+- Mix Librarian and Debezium connectors in the same pipeline
+- Apply Debezium-specific filtering and routing logic
+
 ## License
 
 MIT
