@@ -149,12 +149,19 @@ func (r *Repository) Write(ctx context.Context, event replicator.Event) error {
 		return err
 	}
 
+	// Generate key from source metadata (similar to Debezium's default key format)
+	// Use format: {db}.{schema}.{table} or just {table} if consistent
+	key := fmt.Sprintf("%s.%s.%s",
+		event.Payload.Source.Db,
+		event.Payload.Source.Schema,
+		event.Payload.Source.Table)
+
 	message := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{
 			Topic:     &r.topic,
 			Partition: kafka.PartitionAny,
 		},
-		Key:   []byte(event.ID),
+		Key:   []byte(key),
 		Value: eventData,
 	}
 
