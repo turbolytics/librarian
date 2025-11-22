@@ -27,3 +27,7 @@ stop-backing-services:
 .PHONY: build
 build:
 	go build -o bin/librarian ./cmd/librarian
+
+.PHONY: release-dry-run
+release-dry-run:
+	goreleaser release --snapshot --clean --skip=publish
