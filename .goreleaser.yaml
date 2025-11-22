@@ -16,15 +16,31 @@ before:
     - go generate ./...
 
 builds:
-  - env:
-      - CGO_ENABLED=0
+  - id: darwin-build
+    main: ./cmd/librarian
+    binary: librarian
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: linux-build
+    main: ./cmd/librarian
+    binary: librarian
+    env:
+      - CGO_ENABLED=1
+      - CC=gcc
     goos:
       - linux
-      - windows
-      - darwin
+    goarch:
+      - amd64
+      - arm64
 
 archives:
-  - format: tar.gz
+  - id: default
     # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
       {{ .ProjectName }}_
@@ -33,10 +49,9 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    # use zip for windows archives
-    format_overrides:
-      - goos: windows
-        format: zip
+    files:
+      - LICENSE
+      - README.md
 
 changelog:
   sort: asc

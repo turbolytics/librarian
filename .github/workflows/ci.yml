@@ -9,11 +9,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go 1.21.x
-        uses: actions/setup-go@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.21.x
+          go-version: '1.23'
         id: go
+
+      - name: Install librdkafka
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librdkafka-dev
 
       - name: Build
         run: go build -v ./...
