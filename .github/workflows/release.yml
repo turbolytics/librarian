@@ -51,7 +51,7 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean --split --id linux-build
+          args: release --clean --partial --id linux-build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -61,7 +61,7 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean --split --id darwin-build
+          args: release --clean --partial --id darwin-build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
