@@ -28,8 +28,9 @@ type Source struct {
 	publicationName string
 
 	// WAL replication state
-	currentLSN pglogrepl.LSN
-	relations  map[uint32]*pglogrepl.RelationMessage
+	currentLSN   pglogrepl.LSN
+	persistedLSN pglogrepl.LSN // Last LSN that was durably persisted to target
+	relations    map[uint32]*pglogrepl.RelationMessage
 
 	// Buffer for pending events
 	eventBuffer   []replicator.Event
@@ -138,15 +139,28 @@ func (s *Source) Next(ctx context.Context) (replicator.Event, error) {
 
 			// TODO Metric on keep alive sent
 			if keepalive.ReplyRequested {
+				// Use persistedLSN for flush/apply positions to ensure we only ACK what's been durably persisted
+				// If nothing has been persisted yet, use 0
+				flushLSN := s.persistedLSN
+				if flushLSN == 0 && s.currentLSN > 0 {
+					// If we haven't persisted anything yet but have received data,
+					// don't report any flush position (use 0)
+					flushLSN = 0
+				}
+
 				err := pglogrepl.SendStandbyStatusUpdate(ctx, s.replConn, pglogrepl.StandbyStatusUpdate{
-					WALWritePosition: keepalive.ServerWALEnd,
-					WALFlushPosition: keepalive.ServerWALEnd,
-					WALApplyPosition: keepalive.ServerWALEnd,
+					WALWritePosition: s.currentLSN, // We've received up to currentLSN
+					WALFlushPosition: flushLSN,     // We've only flushed up to persistedLSN
+					WALApplyPosition: flushLSN,     // We've only applied up to persistedLSN
 					ClientTime:       time.Now(),
 					ReplyRequested:   false,
 				})
 				if err != nil {
 					s.logger.Error("Failed to send standby status update", zap.Error(err))
+				} else {
+					s.logger.Debug("Sent keepalive response",
+						zap.String("write_lsn", s.currentLSN.String()),
+						zap.String("flush_lsn", flushLSN.String()))
 				}
 			}
 			return replicator.Event{}, replicator.ErrNoEventsFound
@@ -377,15 +391,22 @@ func (s *Source) handleDelete(msg *pglogrepl.DeleteMessage) (replicator.Event, e
 }
 
 func (s *Source) handleCommit(ctx context.Context, msg *pglogrepl.CommitMessage) (replicator.Event, error) {
-	// Update our current LSN
+	// Update our current LSN (what we've received from Postgres)
 	s.currentLSN = msg.CommitLSN
 
 	// Send heartbeat back to PostgreSQL periodically
+	// Use persistedLSN for flush/apply positions to ensure at-least-once delivery
 	if time.Since(s.lastHeartbeat) > 30*time.Second {
+		flushLSN := s.persistedLSN
+		if flushLSN == 0 && s.currentLSN > 0 {
+			// If we haven't persisted anything yet, don't report any flush position
+			flushLSN = 0
+		}
+
 		err := pglogrepl.SendStandbyStatusUpdate(ctx, s.replConn, pglogrepl.StandbyStatusUpdate{
-			WALWritePosition: msg.CommitLSN,
-			WALFlushPosition: msg.CommitLSN,
-			WALApplyPosition: msg.CommitLSN,
+			WALWritePosition: s.currentLSN, // We've received up to currentLSN
+			WALFlushPosition: flushLSN,     // We've only flushed up to persistedLSN
+			WALApplyPosition: flushLSN,     // We've only applied up to persistedLSN
 			ClientTime:       time.Now(),
 			ReplyRequested:   false,
 		})
@@ -393,7 +414,9 @@ func (s *Source) handleCommit(ctx context.Context, msg *pglogrepl.CommitMessage)
 			s.logger.Error("Failed to send standby status update", zap.Error(err))
 		} else {
 			s.lastHeartbeat = time.Now()
-			s.logger.Debug("Sent heartbeat to PostgreSQL", zap.String("lsn", msg.CommitLSN.String()))
+			s.logger.Debug("Sent periodic heartbeat to PostgreSQL",
+				zap.String("write_lsn", s.currentLSN.String()),
+				zap.String("flush_lsn", flushLSN.String()))
 		}
 	}
 
@@ -541,6 +564,49 @@ func (s *Source) Stats() replicator.SourceStats {
 	}
 
 	return stats
+}
+
+func (s *Source) Checkpoint(ctx context.Context, checkpoint *replicator.Checkpoint) error {
+	if checkpoint == nil {
+		return nil
+	}
+
+	// Parse the LSN from the checkpoint position
+	lsn, err := pglogrepl.ParseLSN(string(checkpoint.Position))
+	if err != nil {
+		s.logger.Error("Failed to parse LSN from checkpoint",
+			zap.String("position", string(checkpoint.Position)),
+			zap.Error(err))
+		return fmt.Errorf("failed to parse LSN from checkpoint: %w", err)
+	}
+
+	// Update the persisted LSN
+	s.persistedLSN = lsn
+
+	s.logger.Debug("Updated persisted LSN",
+		zap.String("lsn", lsn.String()),
+		zap.String("replicator_id", checkpoint.ReplicatorID))
+
+	// Send immediate status update to Postgres with the persisted LSN
+	err = pglogrepl.SendStandbyStatusUpdate(ctx, s.replConn, pglogrepl.StandbyStatusUpdate{
+		WALWritePosition: s.currentLSN,   // We've received up to currentLSN
+		WALFlushPosition: s.persistedLSN, // We've persisted up to persistedLSN
+		WALApplyPosition: s.persistedLSN, // We've applied up to persistedLSN
+		ClientTime:       time.Now(),
+		ReplyRequested:   false,
+	})
+	if err != nil {
+		s.logger.Error("Failed to send standby status update after checkpoint",
+			zap.String("persisted_lsn", s.persistedLSN.String()),
+			zap.Error(err))
+		return fmt.Errorf("failed to send standby status update: %w", err)
+	}
+
+	s.logger.Info("Sent standby status update with persisted LSN",
+		zap.String("write_lsn", s.currentLSN.String()),
+		zap.String("flush_lsn", s.persistedLSN.String()))
+
+	return nil
 }
 
 func (s *Source) Disconnect(ctx context.Context) error {
