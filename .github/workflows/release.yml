@@ -65,11 +65,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Package binaries
+        run: |
+          mkdir -p packaged
+          for dir in dist/*/; do
+            if [ -f "$dir/librarian" ]; then
+              # Extract OS and arch from directory name
+              dirname=$(basename "$dir")
+              # Create archive with proper naming
+              tar -czf "packaged/librarian_${dirname}.tar.gz" -C "$dir" librarian
+            fi
+          done
+          ls -lh packaged/
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist-${{ matrix.goos }}
-          path: dist
+          path: packaged
           retention-days: 1
 
   release:
@@ -86,20 +99,21 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dist-linux
-          path: dist-linux
+          path: releases
 
       - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
           name: dist-darwin
-          path: dist-darwin
+          path: releases
+
+      - name: List artifacts
+        run: ls -lh releases/
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist-linux/**/*
-            dist-darwin/**/*
+          files: releases/*.tar.gz
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
