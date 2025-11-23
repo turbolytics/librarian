@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -77,7 +78,9 @@ type Replicator struct {
 	controlChan    chan Signal
 	lastCheckpoint *Checkpoint
 	logger         *zap.Logger
-	stats          Stats
+
+	mu    sync.RWMutex
+	stats Stats
 }
 
 type ReplicatorOption func(*Replicator)
@@ -254,36 +257,23 @@ func (r *Replicator) Run(ctx context.Context) error {
 			}
 
 			// After successful flush, persist the checkpoint and notify the source
-			// This ensures at-least-once delivery semantics for both MongoDB and Postgres
-			if r.lastCheckpoint != nil {
-				// First, save checkpoint to persistent storage
-				if r.Checkpointer != nil {
-					if err := r.Checkpointer.Save(ctx, r.lastCheckpoint); err != nil {
-						r.logger.Error("Error saving checkpoint", zap.Error(err))
-						return err
-					}
-
-					// Update checkpoint stats
-					r.stats.Replicator.CheckpointCount++
-					r.stats.Replicator.LastCheckpointAt = time.Now()
-
-					r.logger.Info("Checkpoint saved after flush",
-						zap.String("replicator_id", r.ID),
-						zap.String("position", string(r.lastCheckpoint.Position)),
-						zap.Time("timestamp", r.lastCheckpoint.Timestamp))
-				}
-
-				// Then, notify the source that data has been durably persisted
-				// For Postgres: this will ACK the LSN back to the primary
-				// For MongoDB: this is a no-op since checkpoint is already saved above
-				if err := r.Source.Checkpoint(ctx, r.lastCheckpoint); err != nil {
-					r.logger.Error("Error notifying source of checkpoint",
-						zap.String("position", string(r.lastCheckpoint.Position)),
-						zap.Error(err))
-					// Don't return error - source notification is best-effort
-					// The source will get updated on next flush
-				}
+			// This ensures at-least-once delivery semantics for MongoDB
+			if err := r.checkpoint(ctx, r.lastCheckpoint); err != nil {
+				r.logger.Error("Error during checkpointing after flush", zap.Error(err))
+				return err
 			}
+
+			// Then, notify the source that data has been durably persisted
+			// For Postgres: this will ACK the LSN back to the primary
+			// For MongoDB: this is a no-op since checkpoint is already saved above
+			if err := r.Source.Checkpoint(ctx, r.lastCheckpoint); err != nil {
+				r.logger.Error("Error notifying source of checkpoint",
+					zap.String("position", string(r.lastCheckpoint.Position)),
+					zap.Error(err))
+				// Don't return error - source notification is best-effort
+				// The source will get updated on next flush
+			}
+
 		default:
 			// Only process events if we're in streaming state
 			if r.State.Current() != StateStreaming {
@@ -386,14 +376,18 @@ func (r *Replicator) handleSignal(ctx context.Context, signal Signal) error {
 	return nil
 }
 
-func (r *Replicator) checkpoint(ctx context.Context, latestEvent Event) error {
+func (r *Replicator) checkpoint(ctx context.Context, lastCheckpoint *Checkpoint) error {
 	if r.Checkpointer == nil || r.SourceOptions.CheckpointBatchSize == 0 {
 		return nil
 	}
 
+	if lastCheckpoint == nil {
+		return errors.New("no events to checkpoint")
+	}
+
 	checkpoint := &Checkpoint{
 		ReplicatorID: r.ID,
-		Position:     latestEvent.Position,
+		Position:     lastCheckpoint.Position,
 		Timestamp:    time.Now(),
 	}
 
@@ -404,8 +398,10 @@ func (r *Replicator) checkpoint(ctx context.Context, latestEvent Event) error {
 	r.lastCheckpoint = checkpoint
 
 	// Update checkpoint stats
+	r.mu.Lock()
 	r.stats.Replicator.CheckpointCount++
 	r.stats.Replicator.LastCheckpointAt = time.Now()
+	r.mu.Unlock()
 
 	r.logger.Info("Checkpoint saved",
 		zap.String("replicator_id", r.ID),
@@ -417,6 +413,9 @@ func (r *Replicator) checkpoint(ctx context.Context, latestEvent Event) error {
 
 // Stats returns comprehensive stats including source and replicator metrics
 func (r *Replicator) Stats() Stats {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	stats := Stats{
 		Source:     r.Source.Stats(),
 		Target:     r.Target.Stats(),
