@@ -182,8 +182,36 @@ func (r *Repository) Write(ctx context.Context, event replicator.Event) error {
 	return nil
 }
 
-// Flush is a noop since the kafka producer handles batching internally
+// Flush ensures all buffered messages are sent and acknowledged by Kafka brokers.
+// This is critical for at-least-once delivery semantics - we must not checkpoint
+// until we know messages are durably persisted in Kafka.
 func (r *Repository) Flush(ctx context.Context) error {
+	if r.producer == nil {
+		return fmt.Errorf("producer not initialized")
+	}
+
+	// Use context deadline if available, otherwise default to 30 seconds
+	timeoutMs := 30000
+	if deadline, ok := ctx.Deadline(); ok {
+		timeoutMs = int(time.Until(deadline).Milliseconds())
+		if timeoutMs <= 0 {
+			return fmt.Errorf("context deadline exceeded before flush")
+		}
+	}
+
+	r.logger.Debug("Flushing Kafka producer", zap.Int("timeout_ms", timeoutMs))
+
+	// Flush returns the number of messages still in queue after timeout
+	unflushed := r.producer.Flush(timeoutMs)
+	if unflushed > 0 {
+		r.statsMu.Lock()
+		r.stats.LastError = fmt.Sprintf("flush timeout: %d messages remain unflushed", unflushed)
+		r.statsMu.Unlock()
+
+		return fmt.Errorf("kafka flush incomplete: %d messages remain in queue after %dms", unflushed, timeoutMs)
+	}
+
+	r.logger.Debug("Kafka producer flushed successfully")
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -48,6 +49,10 @@ type Source interface {
 	Disconnect(context.Context) error
 	Next(ctx context.Context) (Event, error)
 	Stats() SourceStats
+	// Checkpoint notifies the source that data has been durably persisted up to this checkpoint.
+	// The source can use this information to acknowledge progress to the upstream system.
+	// For example, Postgres can use this to update the LSN it reports as flushed.
+	Checkpoint(ctx context.Context, checkpoint *Checkpoint) error
 }
 
 type Target interface {
@@ -73,7 +78,9 @@ type Replicator struct {
 	controlChan    chan Signal
 	lastCheckpoint *Checkpoint
 	logger         *zap.Logger
-	stats          Stats
+
+	mu    sync.RWMutex
+	stats Stats
 }
 
 type ReplicatorOption func(*Replicator)
@@ -239,10 +246,34 @@ func (r *Replicator) Run(ctx context.Context) error {
 			}
 		case <-flushChan:
 			r.logger.Debug("Flushing to target")
+			// Flush ensures all buffered events are written to the target
+			// Notify the source that we've flushed up to the last checkpoint
+			// Only checkpoint if the data is safely persisted to the target
+			// A write may be buffered in the target, so flushing ensures durability
+			// All checkpointing needs to be done after a successful flush
 			if err := r.Target.Flush(ctx); err != nil {
 				r.logger.Error("Error flushing to target", zap.Error(err))
 				return err
 			}
+
+			// After successful flush, persist the checkpoint and notify the source
+			// This ensures at-least-once delivery semantics for MongoDB
+			if err := r.checkpoint(ctx, r.lastCheckpoint); err != nil {
+				r.logger.Error("Error during checkpointing after flush", zap.Error(err))
+				return err
+			}
+
+			// Then, notify the source that data has been durably persisted
+			// For Postgres: this will ACK the LSN back to the primary
+			// For MongoDB: this is a no-op since checkpoint is already saved above
+			if err := r.Source.Checkpoint(ctx, r.lastCheckpoint); err != nil {
+				r.logger.Error("Error notifying source of checkpoint",
+					zap.String("position", string(r.lastCheckpoint.Position)),
+					zap.Error(err))
+				// Don't return error - source notification is best-effort
+				// The source will get updated on next flush
+			}
+
 		default:
 			// Only process events if we're in streaming state
 			if r.State.Current() != StateStreaming {
@@ -270,9 +301,11 @@ func (r *Replicator) Run(ctx context.Context) error {
 				return err
 			}
 
-			if err := r.checkpoint(ctx, event); err != nil {
-				r.logger.Error("Error checkpointing", zap.Error(err))
-				return err
+			// Track the latest event position for checkpointing after flush
+			r.lastCheckpoint = &Checkpoint{
+				ReplicatorID: r.ID,
+				Position:     event.Position,
+				Timestamp:    time.Now(),
 			}
 
 			// Update replicator stats (source stats are tracked in source itself)
@@ -343,14 +376,18 @@ func (r *Replicator) handleSignal(ctx context.Context, signal Signal) error {
 	return nil
 }
 
-func (r *Replicator) checkpoint(ctx context.Context, latestEvent Event) error {
+func (r *Replicator) checkpoint(ctx context.Context, lastCheckpoint *Checkpoint) error {
 	if r.Checkpointer == nil || r.SourceOptions.CheckpointBatchSize == 0 {
 		return nil
 	}
 
+	if lastCheckpoint == nil {
+		return errors.New("no events to checkpoint")
+	}
+
 	checkpoint := &Checkpoint{
 		ReplicatorID: r.ID,
-		Position:     latestEvent.Position,
+		Position:     lastCheckpoint.Position,
 		Timestamp:    time.Now(),
 	}
 
@@ -361,8 +398,10 @@ func (r *Replicator) checkpoint(ctx context.Context, latestEvent Event) error {
 	r.lastCheckpoint = checkpoint
 
 	// Update checkpoint stats
+	r.mu.Lock()
 	r.stats.Replicator.CheckpointCount++
 	r.stats.Replicator.LastCheckpointAt = time.Now()
+	r.mu.Unlock()
 
 	r.logger.Info("Checkpoint saved",
 		zap.String("replicator_id", r.ID),
@@ -374,6 +413,9 @@ func (r *Replicator) checkpoint(ctx context.Context, latestEvent Event) error {
 
 // Stats returns comprehensive stats including source and replicator metrics
 func (r *Replicator) Stats() Stats {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	stats := Stats{
 		Source:     r.Source.Stats(),
 		Target:     r.Target.Stats(),

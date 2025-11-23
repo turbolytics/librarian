@@ -245,3 +245,16 @@ func (s *Source) Stats() replicator.SourceStats {
 	}
 	return stats
 }
+
+func (s *Source) Checkpoint(ctx context.Context, checkpoint *replicator.Checkpoint) error {
+	// For MongoDB, this is a no-op since the checkpoint (resume token) is already
+	// persisted to storage by the Replicator after a successful flush.
+	// MongoDB change streams will automatically resume from the saved resume token
+	// on reconnection, so we don't need to send any acknowledgment back to MongoDB.
+	if checkpoint != nil {
+		s.logger.Debug("MongoDB checkpoint notification received",
+			zap.String("replicator_id", checkpoint.ReplicatorID),
+			zap.Time("timestamp", checkpoint.Timestamp))
+	}
+	return nil
+}
